@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "81467142268",
+    "project_id": "campusx-5d0c3",
+    "storage_bucket": "campusx-5d0c3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:81467142268:android:1443d6dd8b17df69b899f9",
+        "android_client_info": {
+          "package_name": "com.example.campus_connect"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCa1SkhTzztxM3vvcP1N6HEKxXIdK4P-oU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:81467142268:android:38d512ed7601932eb899f9",
+        "android_client_info": {
+          "package_name": "com.kalvium.campusx"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCa1SkhTzztxM3vvcP1N6HEKxXIdK4P-oU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
