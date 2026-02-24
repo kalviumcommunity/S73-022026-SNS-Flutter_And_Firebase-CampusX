@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../models/event_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/event_provider.dart';
+import '../providers/registration_provider.dart';
 
 /// Screen displaying detailed information about a single event
 class EventDetailScreen extends ConsumerWidget {
@@ -22,6 +23,14 @@ class EventDetailScreen extends ConsumerWidget {
     final authState = ref.watch(authProvider);
     final currentUser = authState.user;
     final operationState = ref.watch(eventOperationsProvider);
+    final registrationOpState = ref.watch(registrationOperationsProvider);
+
+    // Watch registration data for current user
+    final userRegistrationAsync = currentUser != null
+        ? ref.watch(userRegistrationProvider((eventId, currentUser.uid)))
+        : null;
+    
+    final registrationCountAsync = ref.watch(registrationCountProvider(eventId));
 
     return Scaffold(
       appBar: AppBar(
@@ -64,12 +73,20 @@ class EventDetailScreen extends ConsumerWidget {
           final isCreator = currentUser?.uid == event.createdBy;
           final isClubAdmin = currentUser?.role == 'club_admin';
           final isStudent = currentUser?.role == 'student';
+          final isUpcoming = event.date.isAfter(DateTime.now());
 
           return SingleChildScrollView(
             child: Column(
               children: [
-                // Event Details Content
-                _EventDetailsContent(event: event),
+                // Event Details Content with registration info
+                registrationCountAsync.when(
+                  data: (registeredCount) => _EventDetailsContent(
+                    event: event,
+                    registeredCount: registeredCount,
+                  ),
+                  loading: () => _EventDetailsContent(event: event),
+                  error: (_, __) => _EventDetailsContent(event: event),
+                ),
 
                 // Action Buttons
                 Padding(
@@ -77,20 +94,69 @@ class EventDetailScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Show Register button for students
-                      if (isStudent) ...[
-                        FilledButton.icon(
-                          onPressed: operationState.isLoading
-                              ? null
-                              : () => _handleRegister(context, ref, event),
-                          icon: const Icon(Icons.how_to_reg),
-                          label: Text(
-                            operationState.isLoading
-                                ? 'Processing...'
-                                : 'Register for Event',
+                      // Show Register/Cancel button for students (only for upcoming events)
+                      if (isStudent && currentUser != null && isUpcoming) ...[
+                        userRegistrationAsync?.when(
+                          data: (registration) {
+                            return registrationCountAsync.when(
+                              data: (registeredCount) {
+                                return _buildRegistrationButton(
+                                  context,
+                                  ref,
+                                  event,
+                                  currentUser.uid,
+                                  registration,
+                                  registeredCount,
+                                  registrationOpState.isLoading,
+                                );
+                              },
+                              loading: () => const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                              error: (_, __) => const SizedBox.shrink(),
+                            );
+                          },
+                          loading: () => const Center(
+                            child: CircularProgressIndicator(),
                           ),
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          error: (_, __) => const SizedBox.shrink(),
+                        ) ?? const SizedBox.shrink(),
+                      ],
+
+                      // Show message for past events (students only)
+                      if (isStudent && !isUpcoming) ...[
+                        Card(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.info_outline,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withValues(alpha: 0.6),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'This event has already ended. Registration is no longer available.',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(alpha: 0.7),
+                                        ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -129,16 +195,41 @@ class EventDetailScreen extends ConsumerWidget {
                         ),
                       ],
 
-                      // Show loading indicator
-                      if (operationState.isLoading)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 16),
-                          child: Center(
-                            child: CircularProgressIndicator(),
+                      // Show error message
+                      if (registrationOpState.error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Card(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .errorContainer,
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.error_outline,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onErrorContainer,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      registrationOpState.error!,
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onErrorContainer,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
 
-                      // Show error message
                       if (operationState.error != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 16),
@@ -164,41 +255,6 @@ class EventDetailScreen extends ConsumerWidget {
                                         color: Theme.of(context)
                                             .colorScheme
                                             .onErrorContainer,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-
-                      // Show success message
-                      if (operationState.successMessage != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 16),
-                          child: Card(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primaryContainer,
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.check_circle_outline,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onPrimaryContainer,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      operationState.successMessage!,
-                                      style: TextStyle(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onPrimaryContainer,
                                       ),
                                     ),
                                   ),
@@ -252,19 +308,174 @@ class EventDetailScreen extends ConsumerWidget {
     );
   }
 
-  /// Handle student registration
-  void _handleRegister(
+  /// Build registration button based on status
+  Widget _buildRegistrationButton(
     BuildContext context,
     WidgetRef ref,
     EventModel event,
+    String userId,
+    dynamic registration,
+    int registeredCount,
+    bool isLoading,
   ) {
-    // TODO: Implement registration logic
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Registration for "${event.title}" successful!'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
+    // User is not registered
+    if (registration == null) {
+      final hasCapacity = registeredCount < event.capacity;
+      final buttonText = hasCapacity ? 'Register' : 'Join Waitlist';
+      final icon = hasCapacity ? Icons.how_to_reg : Icons.playlist_add;
+
+      return FilledButton.icon(
+        onPressed: isLoading
+            ? null
+            : () => _handleRegister(context, ref, event, userId),
+        icon: isLoading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(icon),
+        label: Text(isLoading ? 'Processing...' : buttonText),
+        style: FilledButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          backgroundColor: hasCapacity
+              ? null
+              : Theme.of(context).colorScheme.secondary,
+        ),
+      );
+    }
+
+    // User is registered
+    if (registration.status == 'registered') {
+      return OutlinedButton.icon(
+        onPressed: isLoading
+            ? null
+            : () => _handleCancel(context, ref, event, userId, 'registration'),
+        icon: isLoading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.cancel),
+        label: Text(isLoading ? 'Processing...' : 'Cancel Registration'),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          foregroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+
+    // User is waitlisted
+    return OutlinedButton.icon(
+      onPressed: isLoading
+          ? null
+          : () => _handleCancel(context, ref, event, userId, 'waitlist'),
+      icon: isLoading
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.remove_circle_outline),
+      label: Text(isLoading ? 'Processing...' : 'Cancel Waitlist'),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        foregroundColor: Theme.of(context).colorScheme.secondary,
       ),
     );
+  }
+
+  /// Handle student registration
+  Future<void> _handleRegister(
+    BuildContext context,
+    WidgetRef ref,
+    EventModel event,
+    String userId,
+  ) async {
+    final success = await ref
+        .read(registrationOperationsProvider.notifier)
+        .registerForEvent(event.id, event.clubId, userId);
+
+    if (context.mounted && success) {
+      final message =
+          ref.read(registrationOperationsProvider).successMessage ?? 'Success';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+        ),
+      );
+    } else if (context.mounted) {
+      final error =
+          ref.read(registrationOperationsProvider).error ?? 'Failed';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  /// Handle registration cancellation
+  Future<void> _handleCancel(
+    BuildContext context,
+    WidgetRef ref,
+    EventModel event,
+    String userId,
+    String type,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Cancel ${type == 'registration' ? 'Registration' : 'Waitlist'}'),
+        content: Text(
+          'Are you sure you want to cancel your ${type == 'registration' ? 'registration' : 'waitlist position'} for "${event.title}"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('No'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Yes, Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      final success = await ref
+          .read(registrationOperationsProvider.notifier)
+          .cancelRegistration(event.id, userId);
+
+      if (context.mounted && success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              type == 'registration'
+                  ? 'Registration cancelled successfully'
+                  : 'Removed from waitlist',
+            ),
+            backgroundColor: Theme.of(context).colorScheme.primary,
+          ),
+        );
+      } else if (context.mounted) {
+        final error =
+            ref.read(registrationOperationsProvider).error ?? 'Failed';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 
   /// Navigate to edit event screen
@@ -332,8 +543,12 @@ class EventDetailScreen extends ConsumerWidget {
 /// Widget displaying the main event details content
 class _EventDetailsContent extends StatelessWidget {
   final EventModel event;
+  final int? registeredCount;
 
-  const _EventDetailsContent({required this.event});
+  const _EventDetailsContent({
+    required this.event,
+    this.registeredCount,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -416,7 +631,9 @@ class _EventDetailsContent extends StatelessWidget {
             _InfoCard(
               icon: Icons.people,
               title: 'Capacity',
-              content: '${event.capacity} attendees',
+              content: registeredCount != null
+                  ? '$registeredCount / ${event.capacity} seats filled'
+                  : '${event.capacity} seats',
             ),
             const SizedBox(height: 24),
 

@@ -14,13 +14,13 @@ class AuthService {
 
   /// Sign up a new user with email and password
   /// 
-  /// Creates a user in Firebase Auth and stores additional user data in Firestore
+  /// Creates a user in Firebase Auth and stores additional user data in Firestore.
+  /// All new users are automatically assigned the "student" role.
   /// 
   /// Parameters:
   /// - [name]: User's full name
   /// - [email]: User's email address
   /// - [password]: User's password
-  /// - [role]: User's role (e.g., 'student', 'admin', 'club_lead')
   /// 
   /// Returns: [UserCredential] on successful signup
   /// Throws: [FirebaseAuthException] or [FirebaseException] on failure
@@ -28,7 +28,6 @@ class AuthService {
     required String name,
     required String email,
     required String password,
-    required String role,
   }) async {
     try {
       // Create user with Firebase Auth
@@ -37,12 +36,13 @@ class AuthService {
         password: password,
       );
 
-      // Store user data in Firestore
+      // Store user data in Firestore with student role
       if (userCredential.user != null) {
         await _firestore.collection('users').doc(userCredential.user!.uid).set({
+          'uid': userCredential.user!.uid,
           'name': name,
           'email': email,
-          'role': role,
+          'role': 'student',
           'createdAt': FieldValue.serverTimestamp(),
         });
       }

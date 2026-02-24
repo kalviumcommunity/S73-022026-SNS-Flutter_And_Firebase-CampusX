@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../auth/providers/auth_provider.dart';
 
@@ -23,12 +24,12 @@ class AdminDashboard extends ConsumerWidget {
           ),
         ],
       ),
-      body: Center(
+      body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              const SizedBox(height: 24),
               Icon(
                 Icons.security,
                 size: 100,
@@ -81,6 +82,16 @@ class AdminDashboard extends ConsumerWidget {
                       ),
                       const Divider(),
                       ListTile(
+                        leading: const Icon(Icons.admin_panel_settings),
+                        title: const Text('Role Requests'),
+                        subtitle: const Text('Review role upgrade requests'),
+                        trailing: const Icon(Icons.arrow_forward_ios),
+                        onTap: () {
+                          context.push('/role-requests');
+                        },
+                      ),
+                      const Divider(),
+                      ListTile(
                         leading: const Icon(Icons.people),
                         title: const Text('User Management'),
                         subtitle: const Text('Manage users and permissions'),
@@ -103,6 +114,7 @@ class AdminDashboard extends ConsumerWidget {
                   ),
                 ),
               ),
+              const SizedBox(height: 24),
             ],
           ),
         ),

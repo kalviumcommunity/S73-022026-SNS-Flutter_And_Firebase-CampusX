@@ -415,22 +415,36 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
 
     if (context.mounted) {
       if (eventId != null) {
-        // Show success message
+        // Flag to track if user clicked View button
+        bool viewClicked = false;
+        
+        // Show success message with 5-second duration
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Event created successfully!'),
             backgroundColor: Theme.of(context).colorScheme.primary,
+            duration: const Duration(seconds: 5),
             action: SnackBarAction(
               label: 'View',
               textColor: Theme.of(context).colorScheme.onPrimary,
               onPressed: () {
-                context.go('/event-detail/$eventId');
+                // Mark that view was clicked
+                viewClicked = true;
+                // Pop the create event screen first
+                context.pop();
+                // Then navigate to the newly created event detail page
+                context.push('/event-detail/$eventId');
               },
             ),
           ),
         );
-        // Pop back to events list
-        context.pop();
+        
+        // Auto-dismiss and navigate back after 5 seconds only if View wasn't clicked
+        Future.delayed(const Duration(seconds: 5), () {
+          if (context.mounted && !viewClicked) {
+            context.pop();
+          }
+        });
       }
     }
   }
