@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../auth/providers/auth_provider.dart';
 
@@ -66,7 +67,7 @@ class ClubDashboard extends ConsumerWidget {
                         subtitle: const Text('Organize new club events'),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () {
-                          // TODO: Navigate to create event
+                          context.push('/create-event');
                         },
                       ),
                       const Divider(),
@@ -76,7 +77,7 @@ class ClubDashboard extends ConsumerWidget {
                         subtitle: const Text('Edit and track your events'),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () {
-                          // TODO: Navigate to manage events
+                          context.push('/events');
                         },
                       ),
                       const Divider(),
