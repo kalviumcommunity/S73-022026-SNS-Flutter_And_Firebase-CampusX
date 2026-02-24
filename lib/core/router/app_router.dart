@@ -10,6 +10,8 @@ import '../../features/dashboard/screens/admin_dashboard.dart';
 import '../../features/events/screens/event_list_screen.dart';
 import '../../features/events/screens/event_details_screen.dart';
 import '../../features/events/screens/create_event_screen.dart';
+import '../../features/events/screens/event_registration_screen.dart';
+import '../../features/admin/screens/role_requests_screen.dart';
 
 /// GoRouter configuration provider
 final routerProvider = Provider<GoRouter>((ref) {
@@ -79,6 +81,19 @@ final routerProvider = Provider<GoRouter>((ref) {
           final eventId = state.pathParameters['id']!;
           return EventDetailScreen(eventId: eventId);
         },
+      ),
+      GoRoute(
+        path: '/event-registrations/:id',
+        name: 'event-registrations',
+        builder: (context, state) {
+          final eventId = state.pathParameters['id']!;
+          return EventRegistrationsScreen(eventId: eventId);
+        },
+      ),
+      GoRoute(
+        path: '/role-requests',
+        name: 'role-requests',
+        builder: (context, state) => const RoleRequestsScreen(),
       ),
     ],
   );

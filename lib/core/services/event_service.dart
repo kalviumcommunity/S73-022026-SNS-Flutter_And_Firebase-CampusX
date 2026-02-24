@@ -43,20 +43,24 @@ class EventService {
   /// Parameters:
   /// - [clubId]: The ID of the club to get events for
   /// 
-  /// Returns: Stream of List\<EventModel\>
+  /// Returns: Stream of List\<EventModel\> sorted by date (descending)
   Stream<List<EventModel>> getEventsByClub(String clubId) {
     try {
       return _eventsCollection
           .where('clubId', isEqualTo: clubId)
-          .orderBy('date', descending: true)
           .snapshots()
           .map((snapshot) {
-        return snapshot.docs.map((doc) {
+        final events = snapshot.docs.map((doc) {
           return EventModel.fromMap(
             doc.data() as Map<String, dynamic>,
             doc.id,
           );
         }).toList();
+        
+        // Sort in-memory by date (descending) to avoid composite index requirement
+        events.sort((a, b) => b.date.compareTo(a.date));
+        
+        return events;
       });
     } catch (e) {
       throw Exception('Failed to get events for club: $e');
@@ -158,20 +162,24 @@ class EventService {
   /// Parameters:
   /// - [userId]: The ID of the user who created the events
   /// 
-  /// Returns: Stream of List\<EventModel\>
+  /// Returns: Stream of List\<EventModel\> sorted by date (descending)
   Stream<List<EventModel>> getEventsByCreator(String userId) {
     try {
       return _eventsCollection
           .where('createdBy', isEqualTo: userId)
-          .orderBy('date', descending: true)
           .snapshots()
           .map((snapshot) {
-        return snapshot.docs.map((doc) {
+        final events = snapshot.docs.map((doc) {
           return EventModel.fromMap(
             doc.data() as Map<String, dynamic>,
             doc.id,
           );
         }).toList();
+        
+        // Sort in-memory by date (descending) to avoid composite index requirement
+        events.sort((a, b) => b.date.compareTo(a.date));
+        
+        return events;
       });
     } catch (e) {
       throw Exception('Failed to get events by creator: $e');

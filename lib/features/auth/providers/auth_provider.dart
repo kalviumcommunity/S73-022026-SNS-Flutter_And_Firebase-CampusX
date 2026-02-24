@@ -84,11 +84,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   /// Sign up a new user
+  /// 
+  /// All new users are automatically assigned the "student" role
   Future<void> signUp({
     required String name,
     required String email,
     required String password,
-    required String role,
   }) async {
     try {
       state = state.copyWith(isLoading: true, error: null);
@@ -97,7 +98,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
         name: name,
         email: email,
         password: password,
-        role: role,
       );
 
       // User data will be loaded by auth state listener

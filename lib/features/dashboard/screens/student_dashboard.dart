@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../auth/providers/auth_provider.dart';
+import '../providers/role_request_provider.dart';
 
 class StudentDashboard extends ConsumerWidget {
   const StudentDashboard({super.key});
@@ -10,6 +12,7 @@ class StudentDashboard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final theme = Theme.of(context);
+    final roleRequestState = ref.watch(roleRequestOperationsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -66,7 +69,7 @@ class StudentDashboard extends ConsumerWidget {
                         subtitle: const Text('Find and register for events'),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () {
-                          // TODO: Navigate to events
+                          context.push('/events');
                         },
                       ),
                       const Divider(),
@@ -93,10 +96,85 @@ class StudentDashboard extends ConsumerWidget {
                   ),
                 ),
               ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: roleRequestState.isLoading
+                      ? null
+                      : () => _requestClubAdminAccess(context, ref, user?.uid),
+                  icon: roleRequestState.isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.admin_panel_settings),
+                  label: Text(
+                    roleRequestState.isLoading
+                        ? 'Submitting Request...'
+                        : 'Request Club Admin Access',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 16,
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  /// Handle club admin access request
+  void _requestClubAdminAccess(
+    BuildContext context,
+    WidgetRef ref,
+    String? userId,
+  ) async {
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('User not found. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final success = await ref
+        .read(roleRequestOperationsProvider.notifier)
+        .requestRoleUpgrade(userId);
+
+    if (context.mounted) {
+      final state = ref.read(roleRequestOperationsProvider);
+      
+      if (success && state.successMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(state.successMessage!),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else if (!success && state.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(state.error!),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+
+      // Clear messages after showing
+      ref.read(roleRequestOperationsProvider.notifier).clearMessages();
+    }
   }
 }

@@ -18,14 +18,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  String _selectedRole = 'student';
   bool _obscurePassword = true;
-
-  final List<Map<String, String>> _roles = [
-    {'value': 'student', 'label': 'Student'},
-    {'value': 'club_admin', 'label': 'Club Admin'},
-    {'value': 'college_admin', 'label': 'College Admin'},
-  ];
 
   @override
   void dispose() {
@@ -45,7 +38,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               name: _nameController.text.trim(),
               email: _emailController.text.trim(),
               password: _passwordController.text,
-              role: _selectedRole,
             );
 
         if (mounted) {
@@ -206,32 +198,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     textInputAction: TextInputAction.done,
                     validator: _validatePassword,
                     enabled: !authState.isLoading,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Role Dropdown
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedRole,
-                    decoration: InputDecoration(
-                      labelText: 'Role',
-                      prefixIcon: const Icon(Icons.badge_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    items: _roles.map((role) {
-                      return DropdownMenuItem<String>(
-                        value: role['value'],
-                        child: Text(role['label']!),
-                      );
-                    }).toList(),
-                    onChanged: authState.isLoading
-                        ? null
-                        : (value) {
-                            setState(() {
-                              _selectedRole = value!;
-                            });
-                          },
                   ),
                   const SizedBox(height: 24),
 
