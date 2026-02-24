@@ -7,6 +7,9 @@ import '../../features/auth/screens/signup_screen.dart';
 import '../../features/dashboard/screens/student_dashboard.dart';
 import '../../features/dashboard/screens/club_dashboard.dart';
 import '../../features/dashboard/screens/admin_dashboard.dart';
+import '../../features/events/screens/event_list_screen.dart';
+import '../../features/events/screens/event_details_screen.dart';
+import '../../features/events/screens/create_event_screen.dart';
 
 /// GoRouter configuration provider
 final routerProvider = Provider<GoRouter>((ref) {
@@ -58,6 +61,24 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/admin-dashboard',
         name: 'admin-dashboard',
         builder: (context, state) => const AdminDashboard(),
+      ),
+      GoRoute(
+        path: '/events',
+        name: 'events',
+        builder: (context, state) => const EventsListScreen(),
+      ),
+      GoRoute(
+        path: '/create-event',
+        name: 'create-event',
+        builder: (context, state) => const CreateEventScreen(),
+      ),
+      GoRoute(
+        path: '/event-detail/:id',
+        name: 'event-detail',
+        builder: (context, state) {
+          final eventId = state.pathParameters['id']!;
+          return EventDetailScreen(eventId: eventId);
+        },
       ),
     ],
   );
