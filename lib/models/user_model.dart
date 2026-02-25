@@ -1,13 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 
-/// User model representing a user in the app
+/// User model representing a user in the app with club-scoped roles
 class UserModel extends Equatable {
   final String uid;
   final String name;
   final String email;
   final String role;
   final DateTime? createdAt;
+  
+  /// List of club IDs where user has admin privileges
+  final List<String> adminClubs;
+  
+  /// List of club IDs the user has joined
+  final List<String> joinedClubs;
 
   const UserModel({
     required this.uid,
@@ -15,6 +21,8 @@ class UserModel extends Equatable {
     required this.email,
     required this.role,
     this.createdAt,
+    this.adminClubs = const [],
+    this.joinedClubs = const [],
   });
 
   /// Create UserModel from Firestore document map
@@ -27,6 +35,12 @@ class UserModel extends Equatable {
       createdAt: map['createdAt'] != null
           ? (map['createdAt'] as Timestamp).toDate()
           : null,
+      adminClubs: map['adminClubs'] != null
+          ? List<String>.from(map['adminClubs'] as List)
+          : [],
+      joinedClubs: map['joinedClubs'] != null
+          ? List<String>.from(map['joinedClubs'] as List)
+          : [],
     );
   }
 
@@ -36,7 +50,11 @@ class UserModel extends Equatable {
       'name': name,
       'email': email,
       'role': role,
-      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+      'adminClubs': adminClubs,
+      'joinedClubs': joinedClubs,
+      'createdAt': createdAt != null 
+          ? Timestamp.fromDate(createdAt!) 
+          : FieldValue.serverTimestamp(),
     };
   }
 
@@ -47,6 +65,8 @@ class UserModel extends Equatable {
     String? email,
     String? role,
     DateTime? createdAt,
+    List<String>? adminClubs,
+    List<String>? joinedClubs,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -54,14 +74,25 @@ class UserModel extends Equatable {
       email: email ?? this.email,
       role: role ?? this.role,
       createdAt: createdAt ?? this.createdAt,
+      adminClubs: adminClubs ?? this.adminClubs,
+      joinedClubs: joinedClubs ?? this.joinedClubs,
     );
   }
 
   @override
-  List<Object?> get props => [uid, name, email, role, createdAt];
+  List<Object?> get props => [
+        uid,
+        name,
+        email,
+        role,
+        createdAt,
+        adminClubs,
+        joinedClubs,
+      ];
 
   @override
   String toString() {
-    return 'UserModel(uid: $uid, name: $name, email: $email, role: $role, createdAt: $createdAt)';
+    return 'UserModel(uid: $uid, name: $name, email: $email, role: $role, '
+        'createdAt: $createdAt, adminClubs: $adminClubs, joinedClubs: $joinedClubs)';
   }
 }
