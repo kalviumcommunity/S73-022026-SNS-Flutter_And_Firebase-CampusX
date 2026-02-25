@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../auth/providers/auth_provider.dart';
+import '../../clubs/providers/club_provider.dart';
 import '../providers/role_request_provider.dart';
 
 class StudentDashboard extends ConsumerWidget {
@@ -13,6 +14,8 @@ class StudentDashboard extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final theme = Theme.of(context);
     final roleRequestState = ref.watch(roleRequestOperationsProvider);
+    final membershipAsync = ref.watch(userTeamMembershipProvider);
+    final userClubAsync = ref.watch(userClubProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -73,16 +76,79 @@ class StudentDashboard extends ConsumerWidget {
                         },
                       ),
                       const Divider(),
-                      ListTile(
-                        leading: const Icon(Icons.groups),
-                        title: const Text('My Clubs'),
-                        subtitle: const Text('View clubs you\'re part of'),
-                        trailing: const Icon(Icons.arrow_forward_ios),
-                        onTap: () {
-                          // TODO: Navigate to clubs
+                      // Show club section based on membership status
+                      membershipAsync.when(
+                        data: (membership) {
+                          if (membership != null) {
+                            // User has approved membership - show My Club
+                            return userClubAsync.when(
+                              data: (club) {
+                                if (club == null) {
+                                  return const SizedBox.shrink();
+                                }
+                                return Column(
+                                  children: [
+                                    ListTile(
+                                      leading: const Icon(Icons.star),
+                                      title: const Text('My Club'),
+                                      subtitle: Text(club.name),
+                                      trailing:
+                                          const Icon(Icons.arrow_forward_ios),
+                                      onTap: () {
+                                        context.push('/clubs/${club.id}');
+                                      },
+                                    ),
+                                    const Divider(),
+                                  ],
+                                );
+                              },
+                              loading: () => const ListTile(
+                                leading: Icon(Icons.star),
+                                title: Text('My Club'),
+                                subtitle: Text('Loading...'),
+                              ),
+                              error: (_, __) => const SizedBox.shrink(),
+                            );
+                          } else {
+                            // User doesn't have membership - show Discover Clubs
+                            return Column(
+                              children: [
+                                ListTile(
+                                  leading: const Icon(Icons.explore),
+                                  title: const Text('Discover Clubs'),
+                                  subtitle: const Text(
+                                      'Find and join clubs on campus'),
+                                  trailing: const Icon(Icons.arrow_forward_ios),
+                                  onTap: () {
+                                    context.push('/clubs');
+                                  },
+                                ),
+                                const Divider(),
+                              ],
+                            );
+                          }
                         },
+                        loading: () => const Column(
+                          children: [
+                            ListTile(
+                              leading: Icon(Icons.groups),
+                              title: Text('Clubs'),
+                              subtitle: Text('Loading...'),
+                            ),
+                            Divider(),
+                          ],
+                        ),
+                        error: (_, __) => const Column(
+                          children: [
+                            ListTile(
+                              leading: Icon(Icons.groups),
+                              title: Text('Clubs'),
+                              subtitle: Text('Error loading club information'),
+                            ),
+                            Divider(),
+                          ],
+                        ),
                       ),
-                      const Divider(),
                       ListTile(
                         leading: const Icon(Icons.notifications),
                         title: const Text('Announcements'),

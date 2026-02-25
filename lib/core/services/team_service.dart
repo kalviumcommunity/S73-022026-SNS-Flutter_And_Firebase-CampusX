@@ -89,7 +89,7 @@ class TeamService {
         clubId: clubId,
         name: name,
         description: description,
-        headIds: const [], // Initially empty
+        headId: null, // Initially no head assigned
         memberCount: 0,
         isActive: true,
         createdBy: creatorId,
@@ -124,7 +124,7 @@ class TeamService {
   /// 3. The user has an approved membership in the team
   ///
   /// Updates:
-  /// - team.headIds array (adds userId)
+  /// - team.headId (sets userId as the single team head)
   /// - team_memberships document (updates role to "team_head")
   ///
   /// Parameters:
@@ -195,21 +195,14 @@ class TeamService {
 
       // Use transaction to update both team and membership
       await _firestore.runTransaction((transaction) async {
-        // Update team headIds
-        final currentHeadIds = teamData['headIds'] != null
-            ? List<String>.from(teamData['headIds'] as List)
-            : <String>[];
-
-        if (!currentHeadIds.contains(userId)) {
-          currentHeadIds.add(userId);
-          transaction.update(
-            _teamsCollection.doc(teamId),
-            {
-              'headIds': currentHeadIds,
-              'updatedAt': FieldValue.serverTimestamp(),
-            },
-          );
-        }
+        // Update team headId with the single head
+        transaction.update(
+          _teamsCollection.doc(teamId),
+          {
+            'headId': userId,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+        );
 
         // Update membership role
         transaction.update(
@@ -237,6 +230,76 @@ class TeamService {
     }
   }
 
+  /// Request team membership with validation to prevent multiple memberships
+  ///
+  /// Before creating a new membership request, verifies that the user does not
+  /// already have any pending or approved memberships in any team.
+  /// This enforces the rule: one team per user.
+  ///
+  /// Parameters:
+  /// - [teamId]: ID of the team to join
+  /// - [userId]: ID of the user requesting membership
+  ///
+  /// Returns: The document ID of the created membership request
+  /// Throws: [Exception] if user already has a pending/approved membership
+  /// Throws: [FirebaseException] on failure
+  Future<String> requestTeamMembership({
+    required String teamId,
+    required String userId,
+  }) async {
+    try {
+      // Check if user already has any pending or approved memberships
+      final existingMemberships = await _teamMembershipsCollection
+          .where('userId', isEqualTo: userId)
+          .where('status', whereIn: ['pending', 'approved'])
+          .limit(1)
+          .get();
+
+      if (existingMemberships.docs.isNotEmpty) {
+        throw Exception(
+          'You already have a pending or approved team membership. '
+          'You can only be part of one team at a time.',
+        );
+      }
+
+      // Verify team exists
+      final teamDoc = await _teamsCollection.doc(teamId).get();
+      if (!teamDoc.exists) {
+        throw Exception('Team not found');
+      }
+
+      final teamData = teamDoc.data() as Map<String, dynamic>;
+      final clubId = teamData['clubId'] as String;
+
+      // Create membership request
+      final membership = TeamMembershipModel(
+        id: '', // Will be set by Firestore
+        teamId: teamId,
+        clubId: clubId,
+        userId: userId,
+        role: 'member',
+        status: 'pending',
+        interviewStatus: 'not_scheduled',
+        requestedAt: Timestamp.now(),
+      );
+
+      final docRef = await _teamMembershipsCollection.add(membership.toMap());
+      return docRef.id;
+    } on FirebaseException catch (e) {
+      throw FirebaseException(
+        plugin: e.plugin,
+        code: e.code,
+        message: 'Failed to request team membership: ${e.message}',
+      );
+    } catch (e) {
+      if (e.toString().contains('already have') ||
+          e.toString().contains('Team not found')) {
+        rethrow;
+      }
+      throw Exception('Failed to request team membership: $e');
+    }
+  }
+
   /// Get all teams for a specific club as a stream
   ///
   /// Parameters:
@@ -247,15 +310,44 @@ class TeamService {
     return _teamsCollection
         .where('clubId', isEqualTo: clubId)
         .where('isActive', isEqualTo: true)
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
+        .map((snapshot) {
+          final teams = snapshot.docs
               .map((doc) => TeamModel.fromMap(
                     doc.data() as Map<String, dynamic>,
                     doc.id,
                   ))
-              .toList(),
-        );
+              .toList();
+          
+          // Sort teams by createdAt in memory to avoid Firestore index requirement
+          teams.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return teams;
+        });
+  }
+
+  /// Get user's approved team membership as a stream
+  ///
+  /// Returns the user's approved team membership if they have one,
+  /// or null if they don't have an approved membership.
+  ///
+  /// Parameters:
+  /// - [userId]: ID of the user
+  ///
+  /// Returns: Stream of TeamMembershipModel or null
+  Stream<TeamMembershipModel?> getUserApprovedMembership(String userId) {
+    return _teamMembershipsCollection
+        .where('userId', isEqualTo: userId)
+        .where('status', isEqualTo: 'approved')
+        .limit(1)
+        .snapshots()
+        .map((snapshot) {
+      if (snapshot.docs.isEmpty) {
+        return null;
+      }
+      return TeamMembershipModel.fromMap(
+        snapshot.docs.first.data() as Map<String, dynamic>,
+        snapshot.docs.first.id,
+      );
+    });
   }
 }

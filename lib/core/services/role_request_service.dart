@@ -88,19 +88,19 @@ class RoleRequestService {
     }
   }
 
-  /// Approve a role upgrade request
+  /// Approve a role upgrade request with club-scoped admin support
   /// 
   /// Uses Firestore transaction to atomically:
   /// 1. Update the request status to "approved"
   /// 2. Set reviewedBy and reviewedAt fields
   /// 3. Update the user's role to "club_admin"
-  /// 4. If clubId exists (existing_club request):
-  ///    - Add clubId to user's adminClubs array
-  ///    - Update club's adminIds array with user UID
+  /// 4. Handle club-scoped admin assignment based on requestType:
+  ///    - "existing_club": Add user to existing club's adminIds and user's adminClubs
+  ///    - "new_club": Create new club and assign user as admin
   /// 
   /// Parameters:
   /// - [requestId]: The ID of the request to approve
-  /// - [adminId]: The ID of the admin approving the request
+  /// - [adminId]: The ID of the admin approving the request (college_admin)
   /// 
   /// Throws: [FirebaseException] on failure
   Future<void> approveRequest(String requestId, String adminId) async {
@@ -116,16 +116,12 @@ class RoleRequestService {
 
         final requestData = requestSnapshot.data() as Map<String, dynamic>;
         final userId = requestData['userId'] as String;
-        final clubId = requestData['clubId'] as String?;
+        final requestType = requestData['requestType'] as String?;
+        final targetClubId = requestData['targetClubId'] as String?;
+        final newClubName = requestData['newClubName'] as String?;
+        final newClubDescription = requestData['newClubDescription'] as String?;
 
-        // Update the request with audit fields
-        transaction.update(requestRef, {
-          'status': 'approved',
-          'reviewedBy': adminId,
-          'reviewedAt': FieldValue.serverTimestamp(),
-        });
-
-        // Prepare user update data
+        // Verify user exists
         final userRef = _usersCollection.doc(userId);
         final userSnapshot = await transaction.get(userRef);
 
@@ -133,47 +129,73 @@ class RoleRequestService {
           throw Exception('User not found');
         }
 
-        final userData = userSnapshot.data() as Map<String, dynamic>;
-        final Map<String, dynamic> userUpdateData = {
-          'role': 'club_admin',
-        };
-
-        // If clubId exists (existing_club request), handle club-scoped admin
-        if (clubId != null && clubId.isNotEmpty) {
-          // Get current adminClubs array or initialize empty list
-          final currentAdminClubs = userData['adminClubs'] != null
-              ? List<String>.from(userData['adminClubs'] as List)
-              : <String>[];
-
-          // Add clubId if not already present
-          if (!currentAdminClubs.contains(clubId)) {
-            currentAdminClubs.add(clubId);
+        // Handle club-scoped admin assignment based on requestType
+        if (requestType == 'existing_club') {
+          // Existing club request
+          if (targetClubId == null || targetClubId.isEmpty) {
+            throw Exception('Target club ID is required for existing_club requests');
           }
 
-          userUpdateData['adminClubs'] = currentAdminClubs;
-
-          // Update the club's adminIds array
-          final clubRef = _firestore.collection('clubs').doc(clubId);
+          // Verify club exists
+          final clubRef = _firestore.collection('clubs').doc(targetClubId);
           final clubSnapshot = await transaction.get(clubRef);
 
-          if (clubSnapshot.exists) {
-            final clubData = clubSnapshot.data() as Map<String, dynamic>;
-            final currentAdminIds = clubData['adminIds'] != null
-                ? List<String>.from(clubData['adminIds'] as List)
-                : <String>[];
-
-            // Add userId if not already present
-            if (!currentAdminIds.contains(userId)) {
-              currentAdminIds.add(userId);
-              transaction.update(clubRef, {
-                'adminIds': currentAdminIds,
-              });
-            }
+          if (!clubSnapshot.exists) {
+            throw Exception('Club not found');
           }
+
+          // Update user: role and adminClubs
+          transaction.update(userRef, {
+            'role': 'club_admin',
+            'adminClubs': FieldValue.arrayUnion([targetClubId]),
+          });
+
+          // Update club: adminIds
+          transaction.update(clubRef, {
+            'adminIds': FieldValue.arrayUnion([userId]),
+          });
+
+        } else if (requestType == 'new_club') {
+          // New club request
+          if (newClubName == null || newClubName.isEmpty) {
+            throw Exception('Club name is required for new_club requests');
+          }
+
+          // Create new club document
+          final clubRef = _firestore.collection('clubs').doc();
+          final newClubId = clubRef.id;
+
+          transaction.set(clubRef, {
+            'name': newClubName,
+            'description': newClubDescription ?? '',
+            'createdBy': userId,
+            'adminIds': [userId],
+            'memberCount': 1,
+            'isActive': true,
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+
+          // Update user: role and adminClubs
+          transaction.update(userRef, {
+            'role': 'club_admin',
+            'adminClubs': FieldValue.arrayUnion([newClubId]),
+          });
+
+        } else {
+          // Legacy request without requestType - maintain backward compatibility
+          // Just upgrade to club_admin without club association
+          transaction.update(userRef, {
+            'role': 'club_admin',
+          });
         }
 
-        // Update the user document
-        transaction.update(userRef, userUpdateData);
+        // Update the role_request with audit fields (common for all types)
+        transaction.update(requestRef, {
+          'status': 'approved',
+          'reviewedBy': adminId,
+          'reviewedAt': FieldValue.serverTimestamp(),
+        });
       });
     } on FirebaseException catch (e) {
       throw FirebaseException(
