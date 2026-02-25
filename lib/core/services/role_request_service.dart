@@ -94,6 +94,9 @@ class RoleRequestService {
   /// 1. Update the request status to "approved"
   /// 2. Set reviewedBy and reviewedAt fields
   /// 3. Update the user's role to "club_admin"
+  /// 4. If clubId exists (existing_club request):
+  ///    - Add clubId to user's adminClubs array
+  ///    - Update club's adminIds array with user UID
   /// 
   /// Parameters:
   /// - [requestId]: The ID of the request to approve
@@ -113,19 +116,64 @@ class RoleRequestService {
 
         final requestData = requestSnapshot.data() as Map<String, dynamic>;
         final userId = requestData['userId'] as String;
+        final clubId = requestData['clubId'] as String?;
 
-        // Update the request
+        // Update the request with audit fields
         transaction.update(requestRef, {
           'status': 'approved',
           'reviewedBy': adminId,
           'reviewedAt': FieldValue.serverTimestamp(),
         });
 
-        // Update the user's role
+        // Prepare user update data
         final userRef = _usersCollection.doc(userId);
-        transaction.update(userRef, {
+        final userSnapshot = await transaction.get(userRef);
+
+        if (!userSnapshot.exists) {
+          throw Exception('User not found');
+        }
+
+        final userData = userSnapshot.data() as Map<String, dynamic>;
+        final Map<String, dynamic> userUpdateData = {
           'role': 'club_admin',
-        });
+        };
+
+        // If clubId exists (existing_club request), handle club-scoped admin
+        if (clubId != null && clubId.isNotEmpty) {
+          // Get current adminClubs array or initialize empty list
+          final currentAdminClubs = userData['adminClubs'] != null
+              ? List<String>.from(userData['adminClubs'] as List)
+              : <String>[];
+
+          // Add clubId if not already present
+          if (!currentAdminClubs.contains(clubId)) {
+            currentAdminClubs.add(clubId);
+          }
+
+          userUpdateData['adminClubs'] = currentAdminClubs;
+
+          // Update the club's adminIds array
+          final clubRef = _firestore.collection('clubs').doc(clubId);
+          final clubSnapshot = await transaction.get(clubRef);
+
+          if (clubSnapshot.exists) {
+            final clubData = clubSnapshot.data() as Map<String, dynamic>;
+            final currentAdminIds = clubData['adminIds'] != null
+                ? List<String>.from(clubData['adminIds'] as List)
+                : <String>[];
+
+            // Add userId if not already present
+            if (!currentAdminIds.contains(userId)) {
+              currentAdminIds.add(userId);
+              transaction.update(clubRef, {
+                'adminIds': currentAdminIds,
+              });
+            }
+          }
+        }
+
+        // Update the user document
+        transaction.update(userRef, userUpdateData);
       });
     } on FirebaseException catch (e) {
       throw FirebaseException(

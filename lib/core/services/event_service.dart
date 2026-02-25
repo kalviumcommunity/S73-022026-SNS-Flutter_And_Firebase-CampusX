@@ -6,22 +6,65 @@ import '../../models/event_model.dart';
 class EventService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String _collectionName = 'events';
+  final String _usersCollectionName = 'users';
 
   /// Get reference to events collection
   CollectionReference get _eventsCollection =>
       _firestore.collection(_collectionName);
 
-  /// Create a new event in Firestore
+  /// Get reference to users collection
+  CollectionReference get _usersCollection =>
+      _firestore.collection(_usersCollectionName);
+
+  /// Create a new event in Firestore with club-scoped permission enforcement
+  /// 
+  /// Verifies that:
+  /// 1. The creator has club_admin role
+  /// 2. The event's clubId exists in creator's adminClubs list
   /// 
   /// Automatically generates document ID and sets server timestamp
   /// 
   /// Parameters:
   /// - [event]: EventModel to create
+  /// - [creatorId]: ID of the user creating the event (must match event.createdBy)
   /// 
   /// Returns: The document ID of the created event
   /// Throws: [FirebaseException] on failure
-  Future<String> createEvent(EventModel event) async {
+  /// Throws: [Exception] if user lacks permission
+  Future<String> createEvent(EventModel event, String creatorId) async {
     try {
+      // Verify creatorId matches event.createdBy to prevent injection
+      if (event.createdBy != creatorId) {
+        throw Exception('Creator ID mismatch: cannot create event for another user');
+      }
+
+      // Fetch user data to verify permissions
+      final userDoc = await _usersCollection.doc(creatorId).get();
+
+      if (!userDoc.exists) {
+        throw Exception('User not found');
+      }
+
+      final userData = userDoc.data() as Map<String, dynamic>;
+      final userRole = userData['role'] as String?;
+      final adminClubs = userData['adminClubs'] != null
+          ? List<String>.from(userData['adminClubs'] as List)
+          : <String>[];
+
+      // Verify user is club_admin
+      if (userRole != 'club_admin' && userRole != 'college_admin') {
+        throw Exception(
+          'Permission denied: Only club admins can create events',
+        );
+      }
+
+      // Verify clubId is in user's adminClubs (college_admins can create for any club)
+      if (userRole == 'club_admin' && !adminClubs.contains(event.clubId)) {
+        throw Exception(
+          'Permission denied: You are not an admin of this club',
+        );
+      }
+
       // Create document with auto-generated ID
       final docRef = await _eventsCollection.add(event.toMap());
       return docRef.id;
@@ -32,6 +75,11 @@ class EventService {
         message: 'Failed to create event: ${e.message}',
       );
     } catch (e) {
+      if (e.toString().contains('Permission denied') ||
+          e.toString().contains('Creator ID mismatch') ||
+          e.toString().contains('User not found')) {
+        rethrow;
+      }
       throw Exception('An unexpected error occurred while creating event: $e');
     }
   }

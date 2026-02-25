@@ -411,7 +411,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     // Create event using provider
     final eventId = await ref
         .read(eventOperationsProvider.notifier)
-        .createEvent(event);
+        .createEvent(event, userId!);
 
     if (context.mounted) {
       if (eventId != null) {
@@ -445,6 +445,16 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
             context.pop();
           }
         });
+      } else {
+        // Show error message
+        final operationState = ref.read(eventOperationsProvider);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(operationState.error ?? 'Failed to create event'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
       }
     }
   }

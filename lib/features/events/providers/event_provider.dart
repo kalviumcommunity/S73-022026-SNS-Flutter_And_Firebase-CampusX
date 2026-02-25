@@ -94,11 +94,11 @@ class EventOperationsNotifier extends StateNotifier<EventOperationState> {
   /// - [event]: EventModel to create
   /// 
   /// Returns: Created event ID on success, null on failure
-  Future<String?> createEvent(EventModel event) async {
+  Future<String?> createEvent(EventModel event, String creatorId) async {
     state = state.copyWith(isLoading: true, error: null, successMessage: null);
 
     try {
-      final eventId = await _eventService.createEvent(event);
+      final eventId = await _eventService.createEvent(event, creatorId);
       state = state.copyWith(
         isLoading: false,
         successMessage: 'Event created successfully',
