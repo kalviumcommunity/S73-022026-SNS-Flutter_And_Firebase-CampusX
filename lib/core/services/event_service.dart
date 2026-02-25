@@ -22,7 +22,7 @@ class EventService {
   /// 1. The creator has club_admin role
   /// 2. The event's clubId exists in creator's adminClubs list
   /// 
-  /// Automatically generates document ID and sets server timestamp
+  /// Prevents arbitrary clubId injection by validating user permissions.
   /// 
   /// Parameters:
   /// - [event]: EventModel to create
@@ -38,7 +38,7 @@ class EventService {
         throw Exception('Creator ID mismatch: cannot create event for another user');
       }
 
-      // Fetch user data to verify permissions
+      // Fetch current user data to verify permissions
       final userDoc = await _usersCollection.doc(creatorId).get();
 
       if (!userDoc.exists) {
@@ -51,15 +51,15 @@ class EventService {
           ? List<String>.from(userData['adminClubs'] as List)
           : <String>[];
 
-      // Verify user is club_admin
-      if (userRole != 'club_admin' && userRole != 'college_admin') {
+      // Verify user has club_admin role
+      if (userRole != 'club_admin') {
         throw Exception(
           'Permission denied: Only club admins can create events',
         );
       }
 
-      // Verify clubId is in user's adminClubs (college_admins can create for any club)
-      if (userRole == 'club_admin' && !adminClubs.contains(event.clubId)) {
+      // Verify clubId is in user's adminClubs to prevent arbitrary clubId injection
+      if (!adminClubs.contains(event.clubId)) {
         throw Exception(
           'Permission denied: You are not an admin of this club',
         );

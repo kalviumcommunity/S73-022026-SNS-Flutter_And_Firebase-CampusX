@@ -8,8 +8,8 @@ class TeamModel extends Equatable {
   final String name;
   final String description;
   
-  /// List of user IDs who head this team
-  final List<String> headIds;
+  /// User ID of the team head (single head per team)
+  final String? headId;
   
   final int memberCount;
   final bool isActive;
@@ -22,7 +22,7 @@ class TeamModel extends Equatable {
     required this.clubId,
     required this.name,
     required this.description,
-    this.headIds = const [],
+    this.headId,
     this.memberCount = 0,
     this.isActive = true,
     required this.createdBy,
@@ -37,9 +37,7 @@ class TeamModel extends Equatable {
       clubId: map['clubId'] as String? ?? '',
       name: map['name'] as String? ?? '',
       description: map['description'] as String? ?? '',
-      headIds: map['headIds'] != null
-          ? List<String>.from(map['headIds'] as List)
-          : [],
+      headId: map['headId'] as String?,
       memberCount: map['memberCount'] as int? ?? 0,
       isActive: map['isActive'] as bool? ?? true,
       createdBy: map['createdBy'] as String? ?? '',
@@ -54,7 +52,7 @@ class TeamModel extends Equatable {
       'clubId': clubId,
       'name': name,
       'description': description,
-      'headIds': headIds,
+      'headId': headId,
       'memberCount': memberCount,
       'isActive': isActive,
       'createdBy': createdBy,
@@ -69,7 +67,7 @@ class TeamModel extends Equatable {
     String? clubId,
     String? name,
     String? description,
-    List<String>? headIds,
+    String? headId,
     int? memberCount,
     bool? isActive,
     String? createdBy,
@@ -81,7 +79,7 @@ class TeamModel extends Equatable {
       clubId: clubId ?? this.clubId,
       name: name ?? this.name,
       description: description ?? this.description,
-      headIds: headIds ?? this.headIds,
+      headId: headId ?? this.headId,
       memberCount: memberCount ?? this.memberCount,
       isActive: isActive ?? this.isActive,
       createdBy: createdBy ?? this.createdBy,
@@ -96,7 +94,7 @@ class TeamModel extends Equatable {
         clubId,
         name,
         description,
-        headIds,
+        headId,
         memberCount,
         isActive,
         createdBy,
@@ -107,7 +105,7 @@ class TeamModel extends Equatable {
   @override
   String toString() {
     return 'TeamModel(id: $id, clubId: $clubId, name: $name, '
-        'description: $description, headIds: $headIds, memberCount: $memberCount, '
+        'description: $description, headId: $headId, memberCount: $memberCount, '
         'isActive: $isActive, createdBy: $createdBy, createdAt: $createdAt, '
         'updatedAt: $updatedAt)';
   }

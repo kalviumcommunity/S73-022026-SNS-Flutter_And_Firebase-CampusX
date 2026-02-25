@@ -12,6 +12,8 @@ import '../../features/events/screens/event_details_screen.dart';
 import '../../features/events/screens/create_event_screen.dart';
 import '../../features/events/screens/event_registration_screen.dart';
 import '../../features/admin/screens/role_requests_screen.dart';
+import '../../features/clubs/screens/club_list_screen.dart';
+import '../../features/clubs/screens/club_profile_screen.dart';
 
 /// GoRouter configuration provider
 final routerProvider = Provider<GoRouter>((ref) {
@@ -94,6 +96,19 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/role-requests',
         name: 'role-requests',
         builder: (context, state) => const RoleRequestsScreen(),
+      ),
+      GoRoute(
+        path: '/clubs',
+        name: 'clubs',
+        builder: (context, state) => const ClubListScreen(),
+      ),
+      GoRoute(
+        path: '/clubs/:id',
+        name: 'club-profile',
+        builder: (context, state) {
+          final clubId = state.pathParameters['id']!;
+          return ClubProfileScreen(clubId: clubId);
+        },
       ),
     ],
   );
