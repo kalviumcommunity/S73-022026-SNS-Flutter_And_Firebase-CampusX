@@ -67,7 +67,7 @@ class AdminDashboard extends ConsumerWidget {
                         subtitle: const Text('View platform statistics'),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () {
-                          // TODO: Navigate to analytics
+                          context.push('/admin/analytics');
                         },
                       ),
                       const Divider(),
@@ -77,7 +77,7 @@ class AdminDashboard extends ConsumerWidget {
                         subtitle: const Text('Oversee all college clubs'),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () {
-                          // TODO: Navigate to manage clubs
+                          context.push('/admin/manage-clubs');
                         },
                       ),
                       const Divider(),
@@ -97,7 +97,7 @@ class AdminDashboard extends ConsumerWidget {
                         subtitle: const Text('Manage users and permissions'),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () {
-                          // TODO: Navigate to user management
+                          context.push('/admin/users');
                         },
                       ),
                       const Divider(),
@@ -107,7 +107,7 @@ class AdminDashboard extends ConsumerWidget {
                         subtitle: const Text('Configure platform settings'),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () {
-                          // TODO: Navigate to settings
+                          context.push('/admin/settings');
                         },
                       ),
                     ],
