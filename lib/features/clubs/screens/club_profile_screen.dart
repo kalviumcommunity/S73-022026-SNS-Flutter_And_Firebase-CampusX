@@ -18,7 +18,7 @@ class ClubProfileScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final clubService = ref.watch(clubServiceProvider);
     final teamsAsync = ref.watch(teamsByClubProvider(clubId));
-    final membershipAsync = ref.watch(userTeamMembershipProvider);
+    final membershipAsync = ref.watch(userMembershipWithStatusProvider);
     final currentUser = ref.watch(currentUserProvider);
 
     return Scaffold(
@@ -236,20 +236,148 @@ class ClubProfileScreen extends ConsumerWidget {
                                     // Don't show join buttons for college admins
                                     if (!isCollegeAdmin) ...[
                                       const SizedBox(height: 12),
-                                      if (isInThisTeam)
-                                        ElevatedButton.icon(
-                                          onPressed: null,
-                                          icon: const Icon(Icons.check_circle),
-                                          label: Text(
-                                            membership?.status == 'approved'
-                                                ? 'Member'
-                                                : 'Pending',
+                                      if (isInThisTeam) ...[
+                                        if (membership?.status == 'approved')
+                                          ElevatedButton.icon(
+                                            onPressed: null,
+                                            icon: const Icon(Icons.check_circle),
+                                            label: const Text('Member'),
+                                            style: ElevatedButton.styleFrom(
+                                              minimumSize: const Size(double.infinity, 40),
+                                              backgroundColor: Colors.green.shade100,
+                                              foregroundColor: Colors.green.shade900,
+                                            ),
+                                          )
+                                        else if (membership?.status == 'pending') ...[
+                                          // Show detailed application status
+                                          Container(
+                                            padding: const EdgeInsets.all(12),
+                                            decoration: BoxDecoration(
+                                              color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: theme.colorScheme.primary.withOpacity(0.3),
+                                              ),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.pending_actions,
+                                                      size: 20,
+                                                      color: theme.colorScheme.primary,
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      'Application Status',
+                                                      style: theme.textTheme.titleSmall?.copyWith(
+                                                        fontWeight: FontWeight.bold,
+                                                        color: theme.colorScheme.primary,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 8),
+                                                _buildInterviewStatusRow(
+                                                  theme,
+                                                  membership!.interviewStatus,
+                                                  membership.interviewResult,
+                                                ),
+                                                if (membership.interviewStatus == 'scheduled' &&
+                                                    membership.interviewScheduledAt != null) ...[
+                                                  const SizedBox(height: 8),
+                                                  Container(
+                                                    padding: const EdgeInsets.all(8),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.blue.shade50,
+                                                      borderRadius: BorderRadius.circular(6),
+                                                    ),
+                                                    child: Row(
+                                                      children: [
+                                                        Icon(
+                                                          Icons.calendar_today,
+                                                          size: 16,
+                                                          color: Colors.blue.shade700,
+                                                        ),
+                                                        const SizedBox(width: 8),
+                                                        Expanded(
+                                                          child: Text(
+                                                            'Interview: ${_formatInterviewDateTime(membership.interviewScheduledAt!.toDate())}',
+                                                            style: theme.textTheme.bodySmall?.copyWith(
+                                                              color: Colors.blue.shade900,
+                                                              fontWeight: FontWeight.w500,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                                if (membership.interviewStatus == 'completed' &&
+                                                    membership.interviewResult == 'passed') ...[
+                                                  const SizedBox(height: 8),
+                                                  Container(
+                                                    padding: const EdgeInsets.all(8),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.green.shade50,
+                                                      borderRadius: BorderRadius.circular(6),
+                                                    ),
+                                                    child: Row(
+                                                      children: [
+                                                        Icon(
+                                                          Icons.check_circle,
+                                                          size: 16,
+                                                          color: Colors.green.shade700,
+                                                        ),
+                                                        const SizedBox(width: 8),
+                                                        Expanded(
+                                                          child: Text(
+                                                            'Interview passed! Waiting for final approval.',
+                                                            style: theme.textTheme.bodySmall?.copyWith(
+                                                              color: Colors.green.shade900,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                                if (membership.interviewStatus == 'completed' &&
+                                                    membership.interviewResult == 'failed') ...[
+                                                  const SizedBox(height: 8),
+                                                  Container(
+                                                    padding: const EdgeInsets.all(8),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.red.shade50,
+                                                      borderRadius: BorderRadius.circular(6),
+                                                    ),
+                                                    child: Row(
+                                                      children: [
+                                                        Icon(
+                                                          Icons.cancel,
+                                                          size: 16,
+                                                          color: Colors.red.shade700,
+                                                        ),
+                                                        const SizedBox(width: 8),
+                                                        Expanded(
+                                                          child: Text(
+                                                            'Interview not successful. Application will be reviewed.',
+                                                            style: theme.textTheme.bodySmall?.copyWith(
+                                                              color: Colors.red.shade900,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
                                           ),
-                                          style: ElevatedButton.styleFrom(
-                                            minimumSize: const Size(double.infinity, 40),
-                                          ),
-                                        )
-                                      else if (hasMembership)
+                                        ],
+                                      ] else if (hasMembership)
                                         ElevatedButton.icon(
                                           onPressed: null,
                                           icon: const Icon(Icons.info_outline),
@@ -378,7 +506,7 @@ class ClubProfileScreen extends ConsumerWidget {
         );
 
         // Refresh membership status
-        ref.invalidate(userTeamMembershipProvider);
+        ref.invalidate(userMembershipWithStatusProvider);
       }
     } catch (e) {
       if (context.mounted) {
@@ -390,6 +518,74 @@ class ClubProfileScreen extends ConsumerWidget {
           ),
         );
       }
+    }
+  }
+
+  Widget _buildInterviewStatusRow(ThemeData theme, String interviewStatus, String? interviewResult) {
+    Color statusColor;
+    IconData statusIcon;
+    String statusText;
+
+    if (interviewStatus == 'not_scheduled') {
+      statusColor = Colors.grey;
+      statusIcon = Icons.event_busy;
+      statusText = 'Interview not yet scheduled';
+    } else if (interviewStatus == 'scheduled') {
+      statusColor = Colors.blue;
+      statusIcon = Icons.event;
+      statusText = 'Interview scheduled';
+    } else if (interviewStatus == 'completed') {
+      if (interviewResult == 'passed') {
+        statusColor = Colors.green;
+        statusIcon = Icons.check_circle;
+        statusText = 'Interview passed';
+      } else {
+        statusColor = Colors.red;
+        statusIcon = Icons.cancel;
+        statusText = 'Interview not passed';
+      }
+    } else {
+      statusColor = Colors.grey;
+      statusIcon = Icons.help_outline;
+      statusText = 'Unknown status';
+    }
+
+    return Row(
+      children: [
+        Icon(statusIcon, size: 18, color: statusColor),
+        const SizedBox(width: 8),
+        Text(
+          statusText,
+          style: TextStyle(
+            fontSize: 14,
+            color: statusColor,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatInterviewDateTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = dateTime.difference(now);
+    
+    final month = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ][dateTime.month - 1];
+    
+    final time = '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    
+    if (difference.inDays == 0) {
+      return 'Today at $time';
+    } else if (difference.inDays == 1) {
+      return 'Tomorrow at $time';
+    } else if (difference.inDays > 0 && difference.inDays < 7) {
+      final weekday = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][dateTime.weekday - 1];
+      return '$weekday at $time';
+    } else {
+      return '$month ${dateTime.day} at $time';
     }
   }
 }

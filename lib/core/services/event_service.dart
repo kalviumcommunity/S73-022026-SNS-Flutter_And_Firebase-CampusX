@@ -47,9 +47,6 @@ class EventService {
 
       final userData = userDoc.data() as Map<String, dynamic>;
       final userRole = userData['role'] as String?;
-      final adminClubs = userData['adminClubs'] != null
-          ? List<String>.from(userData['adminClubs'] as List)
-          : <String>[];
 
       // Verify user has club_admin role
       if (userRole != 'club_admin') {
@@ -58,8 +55,19 @@ class EventService {
         );
       }
 
-      // Verify clubId is in user's adminClubs to prevent arbitrary clubId injection
-      if (!adminClubs.contains(event.clubId)) {
+      // Verify user is admin of this club by checking club's adminIds array
+      final clubDoc = await _firestore.collection('clubs').doc(event.clubId).get();
+      
+      if (!clubDoc.exists) {
+        throw Exception('Club not found');
+      }
+
+      final clubData = clubDoc.data() as Map<String, dynamic>;
+      final adminIds = clubData['adminIds'] != null
+          ? List<String>.from(clubData['adminIds'] as List)
+          : <String>[];
+
+      if (!adminIds.contains(creatorId)) {
         throw Exception(
           'Permission denied: You are not an admin of this club',
         );

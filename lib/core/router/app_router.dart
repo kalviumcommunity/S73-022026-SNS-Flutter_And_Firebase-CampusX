@@ -18,6 +18,10 @@ import '../../features/admin/screens/analytics_screen.dart';
 import '../../features/admin/screens/system_settings_screen.dart';
 import '../../features/clubs/screens/club_list_screen.dart';
 import '../../features/clubs/screens/club_profile_screen.dart';
+import '../../features/teams/screens/manage_teams_screen.dart';
+import '../../features/teams/screens/team_details_screen.dart';
+import '../../features/announcements/screens/create_announcement_screen.dart';
+import '../../features/announcements/screens/announcements_list_screen.dart';
 
 /// GoRouter configuration provider
 final routerProvider = Provider<GoRouter>((ref) {
@@ -132,6 +136,32 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final clubId = state.pathParameters['id']!;
           return ClubProfileScreen(clubId: clubId);
+        },
+      ),
+      GoRoute(
+        path: '/manage-teams',
+        name: 'manage-teams',
+        builder: (context, state) => const ManageTeamsScreen(),
+      ),
+      GoRoute(
+        path: '/teams/:id',
+        name: 'team-details',
+        builder: (context, state) {
+          final teamId = state.pathParameters['id']!;
+          return TeamDetailsScreen(teamId: teamId);
+        },
+      ),
+      GoRoute(
+        path: '/create-announcement',
+        name: 'create-announcement',
+        builder: (context, state) => const CreateAnnouncementScreen(),
+      ),
+      GoRoute(
+        path: '/announcements/:clubId',
+        name: 'announcements',
+        builder: (context, state) {
+          final clubId = state.pathParameters['clubId']!;
+          return AnnouncementsListScreen(clubId: clubId);
         },
       ),
     ],

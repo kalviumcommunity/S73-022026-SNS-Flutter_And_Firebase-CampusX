@@ -4,9 +4,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/services/club_service.dart';
+import '../../../models/club_model.dart';
 import '../../../models/event_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/event_provider.dart';
+
+/// Provider for clubs where user is admin
+final userAdminClubsForEventProvider = StreamProvider<List<ClubModel>>((ref) {
+  final user = ref.watch(currentUserProvider);
+  final clubService = ClubService();
+  
+  if (user == null) {
+    return Stream.value([]);
+  }
+  
+  return clubService.getClubsByAdmin(user.uid);
+});
 
 /// Screen for creating a new event (club_admin only)
 class CreateEventScreen extends ConsumerStatefulWidget {
@@ -22,8 +36,8 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
   final _capacityController = TextEditingController();
-  final _clubIdController = TextEditingController();
 
+  String? _selectedClubId;
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
 
@@ -33,7 +47,6 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     _descriptionController.dispose();
     _locationController.dispose();
     _capacityController.dispose();
-    _clubIdController.dispose();
     super.dispose();
   }
 
@@ -41,6 +54,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   Widget build(BuildContext context) {
     final operationState = ref.watch(eventOperationsProvider);
     final currentUser = ref.watch(authProvider).user;
+    final adminClubsAsync = ref.watch(userAdminClubsForEventProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -58,7 +72,46 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                 ],
               ),
             )
-          : SingleChildScrollView(
+          : adminClubsAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, stack) => Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline, size: 60, color: Colors.red),
+                    const SizedBox(height: 16),
+                    Text('Error: $error'),
+                  ],
+                ),
+              ),
+              data: (clubs) {
+                if (clubs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, size: 60),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'You are not assigned as admin to any club',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Please contact the college admin',
+                          style: TextStyle(fontSize: 14, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                // Auto-select first club if not already selected
+                if (_selectedClubId == null && clubs.isNotEmpty) {
+                  _selectedClubId = clubs.first.id;
+                }
+
+                return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Form(
                 key: _formKey,
@@ -130,23 +183,46 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Club ID Field
-                    TextFormField(
-                      controller: _clubIdController,
-                      decoration: const InputDecoration(
-                        labelText: 'Club ID',
-                        hintText: 'Enter your club ID',
-                        prefixIcon: Icon(Icons.group),
-                        border: OutlineInputBorder(),
-                        helperText: 'The ID of the club organizing this event',
+                    // Club Selection (automatic or dropdown)
+                    if (clubs.length == 1)
+                      InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Club',
+                          prefixIcon: Icon(Icons.group),
+                          border: OutlineInputBorder(),
+                        ),
+                        child: Text(
+                          clubs.first.name,
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                      )
+                    else
+                      DropdownButtonFormField<String>(
+                        value: _selectedClubId,
+                        decoration: const InputDecoration(
+                          labelText: 'Select Club',
+                          prefixIcon: Icon(Icons.group),
+                          border: OutlineInputBorder(),
+                          helperText: 'Choose which club is organizing this event',
+                        ),
+                        items: clubs.map((club) {
+                          return DropdownMenuItem<String>(
+                            value: club.id,
+                            child: Text(club.name),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedClubId = value;
+                          });
+                        },
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please select a club';
+                          }
+                          return null;
+                        },
                       ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter a club ID';
-                        }
-                        return null;
-                      },
-                    ),
                     const SizedBox(height: 16),
 
                     // Date Picker
@@ -312,6 +388,8 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                   ],
                 ),
               ),
+            );
+              },
             ),
     );
   }
@@ -395,12 +473,22 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       _selectedTime!.minute,
     );
 
+    if (_selectedClubId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a club'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     // Create event model
     final event = EventModel(
       id: '', // Will be generated by Firestore
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
-      clubId: _clubIdController.text.trim(),
+      clubId: _selectedClubId!,
       createdBy: userId,
       date: eventDateTime,
       location: _locationController.text.trim(),

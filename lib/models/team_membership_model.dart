@@ -17,6 +17,15 @@ class TeamMembershipModel extends Equatable {
   /// Interview status (e.g., "not_scheduled", "scheduled", "completed")
   final String interviewStatus;
   
+  /// Scheduled interview date and time
+  final Timestamp? interviewScheduledAt;
+  
+  /// Interview result (e.g., "passed", "failed", null if not conducted)
+  final String? interviewResult;
+  
+  /// Notes from the interviewer
+  final String? interviewNotes;
+  
   final Timestamp requestedAt;
   
   /// ID of the admin who reviewed the request
@@ -33,6 +42,9 @@ class TeamMembershipModel extends Equatable {
     this.role = 'member',
     this.status = 'pending',
     this.interviewStatus = 'not_scheduled',
+    this.interviewScheduledAt,
+    this.interviewResult,
+    this.interviewNotes,
     required this.requestedAt,
     this.reviewedBy,
     this.reviewedAt,
@@ -48,6 +60,9 @@ class TeamMembershipModel extends Equatable {
       role: map['role'] as String? ?? 'member',
       status: map['status'] as String? ?? 'pending',
       interviewStatus: map['interviewStatus'] as String? ?? 'not_scheduled',
+      interviewScheduledAt: map['interviewScheduledAt'] as Timestamp?,
+      interviewResult: map['interviewResult'] as String?,
+      interviewNotes: map['interviewNotes'] as String?,
       requestedAt: map['requestedAt'] as Timestamp? ?? Timestamp.now(),
       reviewedBy: map['reviewedBy'] as String?,
       reviewedAt: map['reviewedAt'] as Timestamp?,
@@ -63,6 +78,9 @@ class TeamMembershipModel extends Equatable {
       'role': role,
       'status': status,
       'interviewStatus': interviewStatus,
+      'interviewScheduledAt': interviewScheduledAt,
+      'interviewResult': interviewResult,
+      'interviewNotes': interviewNotes,
       'requestedAt': requestedAt,
       'reviewedBy': reviewedBy,
       'reviewedAt': reviewedAt,
@@ -78,6 +96,9 @@ class TeamMembershipModel extends Equatable {
     String? role,
     String? status,
     String? interviewStatus,
+    Timestamp? interviewScheduledAt,
+    String? interviewResult,
+    String? interviewNotes,
     Timestamp? requestedAt,
     String? reviewedBy,
     Timestamp? reviewedAt,
@@ -90,6 +111,9 @@ class TeamMembershipModel extends Equatable {
       role: role ?? this.role,
       status: status ?? this.status,
       interviewStatus: interviewStatus ?? this.interviewStatus,
+      interviewScheduledAt: interviewScheduledAt ?? this.interviewScheduledAt,
+      interviewResult: interviewResult ?? this.interviewResult,
+      interviewNotes: interviewNotes ?? this.interviewNotes,
       requestedAt: requestedAt ?? this.requestedAt,
       reviewedBy: reviewedBy ?? this.reviewedBy,
       reviewedAt: reviewedAt ?? this.reviewedAt,
@@ -105,6 +129,9 @@ class TeamMembershipModel extends Equatable {
         role,
         status,
         interviewStatus,
+        interviewScheduledAt,
+        interviewResult,
+        interviewNotes,
         requestedAt,
         reviewedBy,
         reviewedAt,
@@ -114,7 +141,8 @@ class TeamMembershipModel extends Equatable {
   String toString() {
     return 'TeamMembershipModel(id: $id, teamId: $teamId, clubId: $clubId, '
         'userId: $userId, role: $role, status: $status, '
-        'interviewStatus: $interviewStatus, requestedAt: $requestedAt, '
-        'reviewedBy: $reviewedBy, reviewedAt: $reviewedAt)';
+        'interviewStatus: $interviewStatus, interviewScheduledAt: $interviewScheduledAt, '
+        'interviewResult: $interviewResult, interviewNotes: $interviewNotes, '
+        'requestedAt: $requestedAt, reviewedBy: $reviewedBy, reviewedAt: $reviewedAt)';
   }
 }

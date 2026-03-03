@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/services/registration_service.dart';
+import '../../../core/services/event_service.dart';
 import '../../../models/registration_model.dart';
+import '../../../models/event_model.dart';
 
 /// Provider for RegistrationService instance
 final registrationServiceProvider = Provider<RegistrationService>((ref) {
@@ -52,6 +54,44 @@ final waitlistedUsersProvider = StreamProvider.autoDispose
     .family<List<RegistrationModel>, String>((ref, eventId) {
   final service = ref.watch(registrationServiceProvider);
   return service.getWaitlistedUsers(eventId);
+});
+
+/// Provider for user's registrations
+/// 
+/// Returns stream of all registrations for a user
+final userRegistrationsProvider = StreamProvider.autoDispose
+    .family<List<RegistrationModel>, String>((ref, userId) {
+  final service = ref.watch(registrationServiceProvider);
+  return service.getRegistrationsForUser(userId);
+});
+
+/// Provider for user's registered events with event data
+/// 
+/// Returns stream of events that the user is registered for (registered or waitlisted)
+/// Combines registration data with actual event information
+final userRegisteredEventsProvider = StreamProvider.autoDispose
+    .family<List<EventModel>, String>((ref, userId) async* {
+  final registrationService = ref.watch(registrationServiceProvider);
+  final eventService = EventService();
+  
+  await for (final registrations in registrationService.getRegistrationsForUser(userId)) {
+    // Fetch event data for each registration
+    final events = <EventModel>[];
+    
+    for (final registration in registrations) {
+      try {
+        final event = await eventService.getEventById(registration.eventId);
+        if (event != null) {
+          events.add(event);
+        }
+      } catch (e) {
+        // Skip events that can't be fetched (might be deleted)
+        continue;
+      }
+    }
+    
+    yield events;
+  }
 });
 
 /// State class for managing registration operations

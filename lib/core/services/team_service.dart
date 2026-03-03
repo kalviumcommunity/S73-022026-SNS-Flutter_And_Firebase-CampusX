@@ -58,9 +58,6 @@ class TeamService {
 
       final userData = userDoc.data() as Map<String, dynamic>;
       final userRole = userData['role'] as String?;
-      final adminClubs = userData['adminClubs'] != null
-          ? List<String>.from(userData['adminClubs'] as List)
-          : <String>[];
 
       // Verify user is club_admin or college_admin
       if (userRole != 'club_admin' && userRole != 'college_admin') {
@@ -69,17 +66,24 @@ class TeamService {
         );
       }
 
-      // Verify clubId is in user's adminClubs (college_admins can create for any club)
-      if (userRole == 'club_admin' && !adminClubs.contains(clubId)) {
-        throw Exception(
-          'Permission denied: You are not an admin of this club',
-        );
-      }
-
-      // Verify club exists
+      // Verify club exists and check admin permissions
       final clubDoc = await _clubsCollection.doc(clubId).get();
       if (!clubDoc.exists) {
         throw Exception('Club not found');
+      }
+
+      // Verify user is admin of this club by checking club's adminIds array (college_admins can create for any club)
+      if (userRole == 'club_admin') {
+        final clubData = clubDoc.data() as Map<String, dynamic>;
+        final adminIds = clubData['adminIds'] != null
+            ? List<String>.from(clubData['adminIds'] as List)
+            : <String>[];
+
+        if (!adminIds.contains(creatorId)) {
+          throw Exception(
+            'Permission denied: You are not an admin of this club',
+          );
+        }
       }
 
       // Create team model
@@ -159,9 +163,6 @@ class TeamService {
 
       final promoterData = promoterDoc.data() as Map<String, dynamic>;
       final promoterRole = promoterData['role'] as String?;
-      final adminClubs = promoterData['adminClubs'] != null
-          ? List<String>.from(promoterData['adminClubs'] as List)
-          : <String>[];
 
       // Verify promoter is club_admin or college_admin
       if (promoterRole != 'club_admin' && promoterRole != 'college_admin') {
@@ -170,11 +171,23 @@ class TeamService {
         );
       }
 
-      // Verify clubId is in promoter's adminClubs (college_admins can promote in any club)
-      if (promoterRole == 'club_admin' && !adminClubs.contains(clubId)) {
-        throw Exception(
-          'Permission denied: You are not an admin of this club',
-        );
+      // Verify promoter is admin of this club by checking club's adminIds array (college_admins can promote in any club)
+      if (promoterRole == 'club_admin') {
+        final clubDoc = await _clubsCollection.doc(clubId).get();
+        if (!clubDoc.exists) {
+          throw Exception('Club not found');
+        }
+
+        final clubData = clubDoc.data() as Map<String, dynamic>;
+        final adminIds = clubData['adminIds'] != null
+            ? List<String>.from(clubData['adminIds'] as List)
+            : <String>[];
+
+        if (!adminIds.contains(promoterId)) {
+          throw Exception(
+            'Permission denied: You are not an admin of this club',
+          );
+        }
       }
 
       // Check if user has approved membership in the team
@@ -300,6 +313,55 @@ class TeamService {
     }
   }
 
+  /// Schedule an interview for a team membership request
+  ///
+  /// Parameters:
+  /// - [membershipId]: ID of the membership request
+  /// - [interviewDateTime]: Scheduled date and time for the interview
+  ///
+  /// Throws: [Exception] on failure
+  Future<void> scheduleInterview({
+    required String membershipId,
+    required DateTime interviewDateTime,
+  }) async {
+    try {
+      await _teamMembershipsCollection.doc(membershipId).update({
+        'interviewStatus': 'scheduled',
+        'interviewScheduledAt': Timestamp.fromDate(interviewDateTime),
+      });
+    } catch (e) {
+      throw Exception('Failed to schedule interview: $e');
+    }
+  }
+
+  /// Mark interview as completed with result
+  ///
+  /// Parameters:
+  /// - [membershipId]: ID of the membership request
+  /// - [result]: Interview result ('passed' or 'failed')
+  /// - [notes]: Optional notes from the interviewer
+  ///
+  /// Throws: [Exception] on failure
+  Future<void> markInterviewCompleted({
+    required String membershipId,
+    required String result,
+    String? notes,
+  }) async {
+    try {
+      if (result != 'passed' && result != 'failed') {
+        throw Exception('Invalid interview result. Must be "passed" or "failed"');
+      }
+
+      await _teamMembershipsCollection.doc(membershipId).update({
+        'interviewStatus': 'completed',
+        'interviewResult': result,
+        'interviewNotes': notes,
+      });
+    } catch (e) {
+      throw Exception('Failed to mark interview as completed: $e');
+    }
+  }
+
   /// Get all teams for a specific club as a stream
   ///
   /// Parameters:
@@ -349,5 +411,287 @@ class TeamService {
         snapshot.docs.first.id,
       );
     });
+  }
+
+  /// Get user's pending or approved membership
+  ///
+  /// Returns the user's membership if they have a pending or approved one,
+  /// or null if they don't have any active membership request.
+  ///
+  /// Parameters:
+  /// - [userId]: ID of the user
+  ///
+  /// Returns: Stream of TeamMembershipModel or null
+  Stream<TeamMembershipModel?> getUserPendingOrApprovedMembership(String userId) {
+    return _teamMembershipsCollection
+        .where('userId', isEqualTo: userId)
+        .where('status', whereIn: ['pending', 'approved'])
+        .limit(1)
+        .snapshots()
+        .map((snapshot) {
+      if (snapshot.docs.isEmpty) {
+        return null;
+      }
+      return TeamMembershipModel.fromMap(
+        snapshot.docs.first.data() as Map<String, dynamic>,
+        snapshot.docs.first.id,
+      );
+    });
+  }
+
+  /// Get all pending membership requests for a club
+  ///
+  /// Parameters:
+  /// - [clubId]: ID of the club
+  ///
+  /// Returns: Stream of list of membership requests with user details
+  Stream<List<Map<String, dynamic>>> getPendingMembershipsByClub(String clubId) {
+    return _teamMembershipsCollection
+        .where('clubId', isEqualTo: clubId)
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .asyncMap((snapshot) async {
+      final memberships = <Map<String, dynamic>>[];
+      
+      for (final doc in snapshot.docs) {
+        final membership = TeamMembershipModel.fromMap(
+          doc.data() as Map<String, dynamic>,
+          doc.id,
+        );
+        
+        // Get user details
+        final userDoc = await _usersCollection.doc(membership.userId).get();
+        final userData = userDoc.exists ? userDoc.data() as Map<String, dynamic> : {};
+        
+        // Get team details
+        final teamDoc = await _teamsCollection.doc(membership.teamId).get();
+        final teamData = teamDoc.exists ? teamDoc.data() as Map<String, dynamic> : {};
+        
+        memberships.add({
+          'membership': membership,
+          'userName': userData['name'] ?? 'Unknown',
+          'userEmail': userData['email'] ?? '',
+          'teamName': teamData['name'] ?? 'Unknown Team',
+        });
+      }
+      
+      return memberships;
+    });
+  }
+
+  /// Get all members of a specific team
+  ///
+  /// Parameters:
+  /// - [teamId]: ID of the team
+  ///
+  /// Returns: Stream of list of team members with user details
+  Stream<List<Map<String, dynamic>>> getTeamMembers(String teamId) {
+    return _teamMembershipsCollection
+        .where('teamId', isEqualTo: teamId)
+        .where('status', isEqualTo: 'approved')
+        .snapshots()
+        .asyncMap((snapshot) async {
+      final members = <Map<String, dynamic>>[];
+      
+      for (final doc in snapshot.docs) {
+        final membership = TeamMembershipModel.fromMap(
+          doc.data() as Map<String, dynamic>,
+          doc.id,
+        );
+        
+        // Get user details
+        final userDoc = await _usersCollection.doc(membership.userId).get();
+        if (userDoc.exists) {
+          final userData = userDoc.data() as Map<String, dynamic>;
+          members.add({
+            'membership': membership,
+            'userId': membership.userId,
+            'name': userData['name'] ?? 'Unknown',
+            'email': userData['email'] ?? '',
+            'role': membership.role,
+          });
+        }
+      }
+      
+      // Sort: team head first, then by name
+      members.sort((a, b) {
+        if (a['role'] == 'team_head' && b['role'] != 'team_head') return -1;
+        if (a['role'] != 'team_head' && b['role'] == 'team_head') return 1;
+        return (a['name'] as String).compareTo(b['name'] as String);
+      });
+      
+      return members;
+    });
+  }
+
+  /// Approve a team membership request
+  ///
+  /// Requires that the interview has been completed and the result is 'passed'
+  ///
+  /// Parameters:
+  /// - [membershipId]: ID of the membership request
+  /// - [reviewerId]: ID of the admin approving the request
+  ///
+  /// Throws: [FirebaseException] on failure
+  Future<void> approveMembershipRequest({
+    required String membershipId,
+    required String reviewerId,
+  }) async {
+    try {
+      await _firestore.runTransaction((transaction) async {
+        final membershipRef = _teamMembershipsCollection.doc(membershipId);
+        final membershipDoc = await transaction.get(membershipRef);
+        
+        if (!membershipDoc.exists) {
+          throw Exception('Membership request not found');
+        }
+        
+        final membershipData = membershipDoc.data() as Map<String, dynamic>;
+        
+        // Check if interview is completed and passed
+        final interviewStatus = membershipData['interviewStatus'] as String? ?? 'not_scheduled';
+        final interviewResult = membershipData['interviewResult'] as String?;
+        
+        if (interviewStatus != 'completed' || interviewResult != 'passed') {
+          throw Exception(
+            'Cannot approve membership. Interview must be completed and passed first.',
+          );
+        }
+        
+        final teamId = membershipData['teamId'] as String;
+        
+        // Update membership status
+        transaction.update(membershipRef, {
+          'status': 'approved',
+          'reviewedBy': reviewerId,
+          'reviewedAt': FieldValue.serverTimestamp(),
+        });
+        
+        // Increment team member count
+        final teamRef = _teamsCollection.doc(teamId);
+        transaction.update(teamRef, {
+          'memberCount': FieldValue.increment(1),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      });
+    } catch (e) {
+      throw Exception('Failed to approve membership: $e');
+    }
+  }
+
+  /// Reject a team membership request
+  ///
+  /// Parameters:
+  /// - [membershipId]: ID of the membership request
+  /// - [reviewerId]: ID of the admin rejecting the request
+  ///
+  /// Throws: [FirebaseException] on failure
+  Future<void> rejectMembershipRequest({
+    required String membershipId,
+    required String reviewerId,
+  }) async {
+    try {
+      await _teamMembershipsCollection.doc(membershipId).update({
+        'status': 'rejected',
+        'reviewedBy': reviewerId,
+        'reviewedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Failed to reject membership: $e');
+    }
+  }
+
+  /// Remove a team member
+  ///
+  /// Parameters:
+  /// - [membershipId]: ID of the membership to remove
+  ///
+  /// Throws: [FirebaseException] on failure
+  Future<void> removeTeamMember(String membershipId) async {
+    try {
+      await _firestore.runTransaction((transaction) async {
+        final membershipRef = _teamMembershipsCollection.doc(membershipId);
+        final membershipDoc = await transaction.get(membershipRef);
+        
+        if (!membershipDoc.exists) {
+          throw Exception('Membership not found');
+        }
+        
+        final membershipData = membershipDoc.data() as Map<String, dynamic>;
+        final teamId = membershipData['teamId'] as String;
+        final userId = membershipData['userId'] as String;
+        
+        // Check if this is the team head
+        final teamRef = _teamsCollection.doc(teamId);
+        final teamDoc = await transaction.get(teamRef);
+        final teamData = teamDoc.data() as Map<String, dynamic>;
+        
+        // If removing the head, clear headId
+        if (teamData['headId'] == userId) {
+          transaction.update(teamRef, {
+            'headId': null,
+            'memberCount': FieldValue.increment(-1),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        } else {
+          transaction.update(teamRef, {
+            'memberCount': FieldValue.increment(-1),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+        
+        // Delete membership
+        transaction.delete(membershipRef);
+      });
+    } catch (e) {
+      throw Exception('Failed to remove team member: $e');
+    }
+  }
+
+  /// Remove team head status (demote to regular member)
+  ///
+  /// Parameters:
+  /// - [teamId]: ID of the team
+  /// - [membershipId]: ID of the membership to demote
+  ///
+  /// Throws: [FirebaseException] on failure
+  Future<void> removeTeamHead({
+    required String teamId,
+    required String membershipId,
+  }) async {
+    try {
+      await _firestore.runTransaction((transaction) async {
+        // Update team to remove headId
+        transaction.update(_teamsCollection.doc(teamId), {
+          'headId': null,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        
+        // Update membership role back to member
+        transaction.update(_teamMembershipsCollection.doc(membershipId), {
+          'role': 'member',
+        });
+      });
+    } catch (e) {
+      throw Exception('Failed to remove team head: $e');
+    }
+  }
+
+  /// Get a team by ID
+  ///
+  /// Parameters:
+  /// - [teamId]: ID of the team to fetch
+  ///
+  /// Returns: TeamModel or null if not found
+  Future<TeamModel?> getTeamById(String teamId) async {
+    try {
+      final doc = await _teamsCollection.doc(teamId).get();
+      if (!doc.exists) {
+        return null;
+      }
+      return TeamModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+    } catch (e) {
+      throw Exception('Failed to fetch team: $e');
+    }
   }
 }

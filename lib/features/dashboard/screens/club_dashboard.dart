@@ -5,6 +5,22 @@ import 'package:intl/intl.dart';
 
 import '../../auth/providers/auth_provider.dart';
 import '../../events/providers/event_provider.dart';
+import '../../clubs/providers/club_provider.dart';
+import '../../../models/event_model.dart';
+import '../../../models/club_model.dart';
+import '../../../core/services/club_service.dart';
+
+/// Provider for clubs where user is admin
+final userAdminClubsProvider = StreamProvider<List<ClubModel>>((ref) {
+  final user = ref.watch(currentUserProvider);
+  final clubService = ClubService();
+  
+  if (user == null) {
+    return Stream.value([]);
+  }
+  
+  return clubService.getClubsByAdmin(user.uid);
+});
 
 class ClubDashboard extends ConsumerWidget {
   const ClubDashboard({super.key});
@@ -101,17 +117,19 @@ class ClubDashboard extends ConsumerWidget {
                         subtitle: const Text('Notify club members'),
                         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                         onTap: () {
-                          // TODO: Navigate to post announcement
+                          context.push('/create-announcement');
                         },
                       ),
                       const Divider(),
+                      _ViewAnnouncementsButton(),
+                      const Divider(),
                       ListTile(
-                        leading: const Icon(Icons.people),
-                        title: const Text('Manage Members'),
-                        subtitle: const Text('View and manage club members'),
+                        leading: const Icon(Icons.groups),
+                        title: const Text('Manage Teams'),
+                        subtitle: const Text('Manage teams, members & requests'),
                         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                         onTap: () {
-                          // TODO: Navigate to members
+                          context.push('/manage-teams');
                         },
                       ),
                     ],
@@ -189,13 +207,123 @@ class _MyEventsSection extends ConsumerWidget {
           );
         }
 
-        return Column(
-          children: events.map((event) {
-            final dateFormat = DateFormat('MMM dd, yyyy');
-            final timeFormat = DateFormat('h:mm a');
-            final isUpcoming = event.date.isAfter(DateTime.now());
+        // Separate and sort events by upcoming/past
+        final now = DateTime.now();
+        final upcomingEvents = events.where((e) => e.date.isAfter(now)).toList();
+        final pastEvents = events.where((e) => !e.date.isAfter(now)).toList();
 
-            return Card(
+        // Sort upcoming events by date (ascending - soonest first)
+        upcomingEvents.sort((a, b) => a.date.compareTo(b.date));
+        // Sort past events by date (descending - most recent first)
+        pastEvents.sort((a, b) => b.date.compareTo(a.date));
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Upcoming Events Section
+            if (upcomingEvents.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.upcoming,
+                      size: 20,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Upcoming Events (${upcomingEvents.length})',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ...upcomingEvents.map((event) => _EventCard(event: event)),
+              const SizedBox(height: 16),
+            ],
+
+            // Past Events Section
+            if (pastEvents.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.history,
+                      size: 20,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Past Events (${pastEvents.length})',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ...pastEvents.map((event) => _EventCard(event: event)),
+            ],
+          ],
+        );
+      },
+      loading: () => const Card(
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: Center(
+            child: CircularProgressIndicator(),
+          ),
+        ),
+      ),
+      error: (error, stack) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 48,
+                color: theme.colorScheme.error,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Error loading events',
+                style: theme.textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                error.toString(),
+                style: theme.textTheme.bodySmall,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Widget for individual event card
+class _EventCard extends StatelessWidget {
+  final EventModel event;
+
+  const _EventCard({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dateFormat = DateFormat('MMM dd, yyyy');
+    final timeFormat = DateFormat('h:mm a');
+    final isUpcoming = event.date.isAfter(DateTime.now());
+
+    return Card(
               margin: const EdgeInsets.only(bottom: 16),
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -317,42 +445,50 @@ class _MyEventsSection extends ConsumerWidget {
                 ),
               ),
             );
-          }).toList(),
+  }
+}
+
+/// Widget to display "View Announcements" button with club selection
+class _ViewAnnouncementsButton extends ConsumerWidget {
+  const _ViewAnnouncementsButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userId = ref.watch(authProvider).user?.uid;
+    
+    if (userId == null) {
+      return const SizedBox.shrink();
+    }
+
+    final clubsAsync = ref.watch(userAdminClubsProvider);
+
+    return clubsAsync.when(
+      data: (adminClubs) {
+        if (adminClubs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        // Use first admin club for announcements
+        final clubId = adminClubs.first.id;
+
+        return ListTile(
+          leading: const Icon(Icons.announcement),
+          title: const Text('View Announcements'),
+          subtitle: const Text('See all club announcements'),
+          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+          onTap: () {
+            context.push('/announcements/$clubId');
+          },
         );
       },
-      loading: () => const Card(
-        child: Padding(
-          padding: EdgeInsets.all(24.0),
-          child: Center(
-            child: CircularProgressIndicator(),
-          ),
-        ),
+      loading: () => ListTile(
+        leading: const Icon(Icons.announcement),
+        title: const Text('View Announcements'),
+        subtitle: const Text('Loading...'),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        enabled: false,
       ),
-      error: (error, stack) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            children: [
-              Icon(
-                Icons.error_outline,
-                size: 48,
-                color: theme.colorScheme.error,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Error loading events',
-                style: theme.textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                error.toString(),
-                style: theme.textTheme.bodySmall,
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
+      error: (_, __) => const SizedBox.shrink(),
     );
   }
 }
