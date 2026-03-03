@@ -153,7 +153,9 @@ class ClubProfileScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Join a team to become a member of this club',
+                        currentUser?.role == 'college_admin'
+                            ? 'View all teams in this club'
+                            : 'Join a team to become a member of this club',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurface.withOpacity(0.7),
                         ),
@@ -192,6 +194,7 @@ class ClubProfileScreen extends ConsumerWidget {
                             // Check if user already has a membership
                             final hasMembership = membership != null;
                             final isInThisTeam = membership?.teamId == team.id;
+                            final isCollegeAdmin = currentUser?.role == 'college_admin';
 
                             return Card(
                               margin: const EdgeInsets.only(bottom: 12),
@@ -230,45 +233,48 @@ class ClubProfileScreen extends ConsumerWidget {
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 12),
-                                    if (isInThisTeam)
-                                      ElevatedButton.icon(
-                                        onPressed: null,
-                                        icon: const Icon(Icons.check_circle),
-                                        label: Text(
-                                          membership?.status == 'approved'
-                                              ? 'Member'
-                                              : 'Pending',
+                                    // Don't show join buttons for college admins
+                                    if (!isCollegeAdmin) ...[
+                                      const SizedBox(height: 12),
+                                      if (isInThisTeam)
+                                        ElevatedButton.icon(
+                                          onPressed: null,
+                                          icon: const Icon(Icons.check_circle),
+                                          label: Text(
+                                            membership?.status == 'approved'
+                                                ? 'Member'
+                                                : 'Pending',
+                                          ),
+                                          style: ElevatedButton.styleFrom(
+                                            minimumSize: const Size(double.infinity, 40),
+                                          ),
+                                        )
+                                      else if (hasMembership)
+                                        ElevatedButton.icon(
+                                          onPressed: null,
+                                          icon: const Icon(Icons.info_outline),
+                                          label: const Text(
+                                            'Already in another team',
+                                          ),
+                                          style: ElevatedButton.styleFrom(
+                                            minimumSize: const Size(double.infinity, 40),
+                                          ),
+                                        )
+                                      else
+                                        ElevatedButton.icon(
+                                          onPressed: () => _requestTeamMembership(
+                                            context,
+                                            ref,
+                                            team.id,
+                                            currentUser?.uid,
+                                          ),
+                                          icon: const Icon(Icons.add),
+                                          label: const Text('Request to Join'),
+                                          style: ElevatedButton.styleFrom(
+                                            minimumSize: const Size(double.infinity, 40),
+                                          ),
                                         ),
-                                        style: ElevatedButton.styleFrom(
-                                          minimumSize: const Size(double.infinity, 40),
-                                        ),
-                                      )
-                                    else if (hasMembership)
-                                      ElevatedButton.icon(
-                                        onPressed: null,
-                                        icon: const Icon(Icons.info_outline),
-                                        label: const Text(
-                                          'Already in another team',
-                                        ),
-                                        style: ElevatedButton.styleFrom(
-                                          minimumSize: const Size(double.infinity, 40),
-                                        ),
-                                      )
-                                    else
-                                      ElevatedButton.icon(
-                                        onPressed: () => _requestTeamMembership(
-                                          context,
-                                          ref,
-                                          team.id,
-                                          currentUser?.uid,
-                                        ),
-                                        icon: const Icon(Icons.add),
-                                        label: const Text('Request to Join'),
-                                        style: ElevatedButton.styleFrom(
-                                          minimumSize: const Size(double.infinity, 40),
-                                        ),
-                                      ),
+                                    ],
                                   ],
                                 ),
                               ),

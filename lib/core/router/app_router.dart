@@ -12,6 +12,10 @@ import '../../features/events/screens/event_details_screen.dart';
 import '../../features/events/screens/create_event_screen.dart';
 import '../../features/events/screens/event_registration_screen.dart';
 import '../../features/admin/screens/role_requests_screen.dart';
+import '../../features/admin/screens/manage_clubs_screen.dart';
+import '../../features/admin/screens/user_management_screen.dart';
+import '../../features/admin/screens/analytics_screen.dart';
+import '../../features/admin/screens/system_settings_screen.dart';
 import '../../features/clubs/screens/club_list_screen.dart';
 import '../../features/clubs/screens/club_profile_screen.dart';
 
@@ -96,6 +100,26 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/role-requests',
         name: 'role-requests',
         builder: (context, state) => const RoleRequestsScreen(),
+      ),
+      GoRoute(
+        path: '/admin/manage-clubs',
+        name: 'admin-manage-clubs',
+        builder: (context, state) => const ManageClubsScreen(),
+      ),
+      GoRoute(
+        path: '/admin/users',
+        name: 'admin-users',
+        builder: (context, state) => const UserManagementScreen(),
+      ),
+      GoRoute(
+        path: '/admin/analytics',
+        name: 'admin-analytics',
+        builder: (context, state) => const AnalyticsScreen(),
+      ),
+      GoRoute(
+        path: '/admin/settings',
+        name: 'admin-settings',
+        builder: (context, state) => const SystemSettingsScreen(),
       ),
       GoRoute(
         path: '/clubs',

@@ -83,4 +83,108 @@ class ClubService {
       throw Exception('Failed to update club status: $e');
     }
   }
+
+  /// Get all members of a club (users with approved team memberships)
+  Future<List<Map<String, dynamic>>> getClubMembers(String clubId) async {
+    try {
+      // Get all approved team memberships for this club
+      final membershipsSnapshot = await _firestore
+          .collection('team_memberships')
+          .where('clubId', isEqualTo: clubId)
+          .where('status', isEqualTo: 'approved')
+          .get();
+
+      // Get unique user IDs
+      final userIds = membershipsSnapshot.docs
+          .map((doc) => doc.data()['userId'] as String)
+          .toSet()
+          .toList();
+
+      if (userIds.isEmpty) {
+        return [];
+      }
+
+      // Fetch user details for all members
+      final members = <Map<String, dynamic>>[];
+      for (final userId in userIds) {
+        final userDoc = await _firestore.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          members.add({
+            'uid': userId,
+            ...userDoc.data()!,
+          });
+        }
+      }
+
+      // Sort by name
+      members.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
+      return members;
+    } catch (e) {
+      throw Exception('Failed to fetch club members: $e');
+    }
+  }
+
+  /// Add a user as club admin
+  Future<void> addClubAdmin(String clubId, String userId) async {
+    try {
+      await _firestore.runTransaction((transaction) async {
+        // Update club's adminIds
+        final clubRef = _clubsCollection.doc(clubId);
+        transaction.update(clubRef, {
+          'adminIds': FieldValue.arrayUnion([userId]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        // Update user's role and adminClubs
+        final userRef = _firestore.collection('users').doc(userId);
+        final userDoc = await transaction.get(userRef);
+        
+        if (userDoc.exists) {
+          transaction.update(userRef, {
+            'role': 'club_admin',
+            'adminClubs': FieldValue.arrayUnion([clubId]),
+          });
+        }
+      });
+    } catch (e) {
+      throw Exception('Failed to add club admin: $e');
+    }
+  }
+
+  /// Remove a user as club admin
+  Future<void> removeClubAdmin(String clubId, String userId) async {
+    try {
+      await _firestore.runTransaction((transaction) async {
+        // Update club's adminIds
+        final clubRef = _clubsCollection.doc(clubId);
+        transaction.update(clubRef, {
+          'adminIds': FieldValue.arrayRemove([userId]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        // Update user's role and adminClubs
+        final userRef = _firestore.collection('users').doc(userId);
+        final userDoc = await transaction.get(userRef);
+        
+        if (userDoc.exists) {
+          final userData = userDoc.data()!;
+          final adminClubs = List<String>.from(userData['adminClubs'] ?? []);
+          adminClubs.remove(clubId);
+
+          // If user has no more admin clubs, change role back to student
+          final updates = <String, dynamic>{
+            'adminClubs': adminClubs,
+          };
+          
+          if (adminClubs.isEmpty && userData['role'] == 'club_admin') {
+            updates['role'] = 'student';
+          }
+
+          transaction.update(userRef, updates);
+        }
+      });
+    } catch (e) {
+      throw Exception('Failed to remove club admin: $e');
+    }
+  }
 }
