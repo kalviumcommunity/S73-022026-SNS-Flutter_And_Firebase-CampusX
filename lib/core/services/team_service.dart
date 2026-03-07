@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/team_model.dart';
 import '../../models/team_membership_model.dart';
+import 'notification_service.dart';
 
 /// Service class for handling team operations using Firestore
 class TeamService {
@@ -325,10 +326,55 @@ class TeamService {
     required DateTime interviewDateTime,
   }) async {
     try {
+      // Fetch membership data to get userId and teamId
+      final membershipDoc = await _teamMembershipsCollection.doc(membershipId).get();
+      
+      if (!membershipDoc.exists) {
+        throw Exception('Membership request not found');
+      }
+      
+      final membershipData = membershipDoc.data() as Map<String, dynamic>;
+      final userId = membershipData['userId'] as String?;
+      final teamId = membershipData['teamId'] as String?;
+      final clubId = membershipData['clubId'] as String?;
+      
+      // Update interview schedule
       await _teamMembershipsCollection.doc(membershipId).update({
         'interviewStatus': 'scheduled',
         'interviewScheduledAt': Timestamp.fromDate(interviewDateTime),
       });
+      
+      // Send push notification about scheduled interview
+      if (userId != null && teamId != null) {
+        try {
+          // Fetch team name for notification
+          final teamDoc = await _teamsCollection.doc(teamId).get();
+          final teamName = teamDoc.exists 
+              ? (teamDoc.data() as Map<String, dynamic>)['name'] as String? ?? 'the team'
+              : 'the team';
+          
+          // Format the date and time
+          final dateStr = '${interviewDateTime.day}/${interviewDateTime.month}/${interviewDateTime.year}';
+          final timeStr = '${interviewDateTime.hour.toString().padLeft(2, '0')}:${interviewDateTime.minute.toString().padLeft(2, '0')}';
+          
+          final notificationService = NotificationService();
+          await notificationService.sendNotificationToUser(
+            userId: userId,
+            title: 'Interview Scheduled',
+            body: 'Your interview for $teamName is scheduled on $dateStr at $timeStr',
+            type: NotificationType.interviewSchedule,
+            data: {
+              'membershipId': membershipId,
+              'teamId': teamId,
+              if (clubId != null) 'clubId': clubId,
+              'interviewDateTime': interviewDateTime.toIso8601String(),
+            },
+          );
+        } catch (e) {
+          // Log error but don't fail interview scheduling
+          print('Failed to send interview schedule notification: $e');
+        }
+      }
     } catch (e) {
       throw Exception('Failed to schedule interview: $e');
     }
@@ -538,6 +584,10 @@ class TeamService {
     required String reviewerId,
   }) async {
     try {
+      String? userId;
+      String? teamId;
+      String? clubId;
+      
       await _firestore.runTransaction((transaction) async {
         final membershipRef = _teamMembershipsCollection.doc(membershipId);
         final membershipDoc = await transaction.get(membershipRef);
@@ -547,6 +597,11 @@ class TeamService {
         }
         
         final membershipData = membershipDoc.data() as Map<String, dynamic>;
+        
+        // Store user and team info for notification
+        userId = membershipData['userId'] as String?;
+        teamId = membershipData['teamId'] as String?;
+        clubId = membershipData['clubId'] as String?;
         
         // Check if interview is completed and passed
         final interviewStatus = membershipData['interviewStatus'] as String? ?? 'not_scheduled';
@@ -558,8 +613,6 @@ class TeamService {
           );
         }
         
-        final teamId = membershipData['teamId'] as String;
-        
         // Update membership status
         transaction.update(membershipRef, {
           'status': 'approved',
@@ -568,12 +621,39 @@ class TeamService {
         });
         
         // Increment team member count
-        final teamRef = _teamsCollection.doc(teamId);
+        final teamRef = _teamsCollection.doc(teamId!);
         transaction.update(teamRef, {
           'memberCount': FieldValue.increment(1),
           'updatedAt': FieldValue.serverTimestamp(),
         });
       });
+      
+      // Send push notification after successful approval
+      if (userId != null && teamId != null) {
+        try {
+          // Fetch team name for notification
+          final teamDoc = await _teamsCollection.doc(teamId).get();
+          final teamName = teamDoc.exists 
+              ? (teamDoc.data() as Map<String, dynamic>)['name'] as String? ?? 'the team'
+              : 'the team';
+          
+          final notificationService = NotificationService();
+          await notificationService.sendNotificationToUser(
+            userId: userId!,
+            title: 'Team Membership Approved',
+            body: 'Congratulations! You have been approved to join $teamName',
+            type: NotificationType.teamMembership,
+            data: {
+              'membershipId': membershipId,
+              'teamId': teamId,
+              if (clubId != null) 'clubId': clubId,
+            },
+          );
+        } catch (e) {
+          // Log error but don't fail approval
+          print('Failed to send membership approval notification: $e');
+        }
+      }
     } catch (e) {
       throw Exception('Failed to approve membership: $e');
     }
@@ -692,6 +772,64 @@ class TeamService {
       return TeamModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
     } catch (e) {
       throw Exception('Failed to fetch team: $e');
+    }
+  }
+
+  /// Search teams by name
+  ///
+  /// Note: Firestore doesn't support full-text search, so we fetch
+  /// teams for the club and filter in-memory.
+  ///
+  /// Parameters:
+  /// - [clubId]: ID of the club to search within
+  /// - [query]: Search query string
+  ///
+  /// Returns: Stream of filtered teams
+  Stream<List<TeamModel>> searchTeamsByName(String clubId, String query) {
+    try {
+      if (query.isEmpty) {
+        return getTeamsByClub(clubId);
+      }
+
+      return getTeamsByClub(clubId).map((teams) {
+        final lowerQuery = query.toLowerCase();
+        return teams.where((team) {
+          return team.name.toLowerCase().contains(lowerQuery) ||
+              team.description.toLowerCase().contains(lowerQuery);
+        }).toList();
+      });
+    } catch (e) {
+      throw Exception('Failed to search teams: $e');
+    }
+  }
+
+  /// Get filtered teams
+  ///
+  /// Parameters:
+  /// - [clubId]: Filter by club ID
+  /// - [searchQuery]: Search in name and description
+  ///
+  /// Returns: Stream of filtered teams
+  Stream<List<TeamModel>> getFilteredTeams({
+    required String clubId,
+    String? searchQuery,
+  }) {
+    try {
+      Stream<List<TeamModel>> teamStream = getTeamsByClub(clubId);
+
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        teamStream = teamStream.map((teams) {
+          final lowerQuery = searchQuery.toLowerCase();
+          return teams.where((team) {
+            return team.name.toLowerCase().contains(lowerQuery) ||
+                team.description.toLowerCase().contains(lowerQuery);
+          }).toList();
+        });
+      }
+
+      return teamStream;
+    } catch (e) {
+      throw Exception('Failed to get filtered teams: $e');
     }
   }
 }

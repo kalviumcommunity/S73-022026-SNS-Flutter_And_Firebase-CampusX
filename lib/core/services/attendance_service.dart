@@ -219,6 +219,39 @@ class AttendanceService {
     }
   }
 
+  /// Get stream of all attendances for a specific user
+  /// 
+  /// Parameters:
+  /// - [userId]: ID of the user
+  /// 
+  /// Returns: Stream of List<AttendanceModel>
+  Stream<List<AttendanceModel>> getAttendancesForUser(String userId) {
+    try {
+      return _attendancesCollection
+          .where('userId', isEqualTo: userId)
+          .snapshots()
+          .map((snapshot) {
+        final attendances = snapshot.docs
+            .map((doc) => AttendanceModel.fromMap(
+                  doc.data() as Map<String, dynamic>,
+                  doc.id,
+                ))
+            .toList();
+        
+        // Sort by markedAt descending (most recent first)
+        attendances.sort((a, b) {
+          if (a.markedAt == null && b.markedAt == null) return 0;
+          if (a.markedAt == null) return 1;
+          if (b.markedAt == null) return -1;
+          return b.markedAt!.compareTo(a.markedAt!);
+        });
+        return attendances;
+      });
+    } catch (e) {
+      return Stream.value([]);
+    }
+  }
+
   /// Delete attendance record
   /// 
   /// Parameters:

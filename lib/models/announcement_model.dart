@@ -1,11 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 
+import 'attachment_model.dart';
+
 /// Model for announcements posted by club admins
 class AnnouncementModel extends Equatable {
   final String id;
   final String title;
   final String content;
+  final List<AttachmentModel> attachments;
   final String clubId;
   final String? teamId; // Optional: announcement can be for specific team or entire club
   final String createdBy;
@@ -18,6 +21,7 @@ class AnnouncementModel extends Equatable {
     required this.id,
     required this.title,
     required this.content,
+    this.attachments = const [],
     required this.clubId,
     this.teamId,
     required this.createdBy,
@@ -29,10 +33,16 @@ class AnnouncementModel extends Equatable {
 
   /// Create AnnouncementModel from Firestore document
   factory AnnouncementModel.fromMap(Map<String, dynamic> map, String documentId) {
+    final attachmentsList = map['attachments'] as List<dynamic>? ?? [];
+    final attachments = attachmentsList
+        .map((item) => AttachmentModel.fromMap(item as Map<String, dynamic>))
+        .toList();
+
     return AnnouncementModel(
       id: documentId,
       title: map['title'] as String? ?? '',
       content: map['content'] as String? ?? '',
+      attachments: attachments,
       clubId: map['clubId'] as String? ?? '',
       teamId: map['teamId'] as String?,
       createdBy: map['createdBy'] as String? ?? '',
@@ -52,6 +62,7 @@ class AnnouncementModel extends Equatable {
     return {
       'title': title,
       'content': content,
+      'attachments': attachments.map((a) => a.toMap()).toList(),
       'clubId': clubId,
       'teamId': teamId,
       'createdBy': createdBy,
@@ -67,6 +78,7 @@ class AnnouncementModel extends Equatable {
     String? id,
     String? title,
     String? content,
+    List<AttachmentModel>? attachments,
     String? clubId,
     String? teamId,
     String? createdBy,
@@ -79,6 +91,7 @@ class AnnouncementModel extends Equatable {
       id: id ?? this.id,
       title: title ?? this.title,
       content: content ?? this.content,
+      attachments: attachments ?? this.attachments,
       clubId: clubId ?? this.clubId,
       teamId: teamId ?? this.teamId,
       createdBy: createdBy ?? this.createdBy,
@@ -94,6 +107,7 @@ class AnnouncementModel extends Equatable {
         id,
         title,
         content,
+        attachments,
         clubId,
         teamId,
         createdBy,

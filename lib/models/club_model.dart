@@ -6,6 +6,7 @@ class ClubModel extends Equatable {
   final String id;
   final String name;
   final String description;
+  final String? logoUrl;
   final String createdBy;
   final List<String> adminIds;
   final int memberCount;
@@ -17,6 +18,7 @@ class ClubModel extends Equatable {
     required this.id,
     required this.name,
     required this.description,
+    this.logoUrl,
     required this.createdBy,
     this.adminIds = const [],
     this.memberCount = 0,
@@ -31,6 +33,7 @@ class ClubModel extends Equatable {
       id: documentId,
       name: map['name'] as String? ?? '',
       description: map['description'] as String? ?? '',
+      logoUrl: map['logoUrl'] as String?,
       createdBy: map['createdBy'] as String? ?? '',
       adminIds: map['adminIds'] != null
           ? List<String>.from(map['adminIds'] as List)
@@ -47,6 +50,7 @@ class ClubModel extends Equatable {
     return {
       'name': name,
       'description': description,
+      'logoUrl': logoUrl,
       'createdBy': createdBy,
       'adminIds': adminIds,
       'memberCount': memberCount,
@@ -61,6 +65,7 @@ class ClubModel extends Equatable {
     String? id,
     String? name,
     String? description,
+    String? logoUrl,
     String? createdBy,
     List<String>? adminIds,
     int? memberCount,
@@ -72,6 +77,7 @@ class ClubModel extends Equatable {
       id: id ?? this.id,
       name: name ?? this.name,
       description: description ?? this.description,
+      logoUrl: logoUrl ?? this.logoUrl,
       createdBy: createdBy ?? this.createdBy,
       adminIds: adminIds ?? this.adminIds,
       memberCount: memberCount ?? this.memberCount,
@@ -86,6 +92,7 @@ class ClubModel extends Equatable {
         id,
         name,
         description,
+        logoUrl,
         createdBy,
         adminIds,
         memberCount,

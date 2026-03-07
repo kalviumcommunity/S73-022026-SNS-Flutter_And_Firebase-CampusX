@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/announcement_model.dart';
+import 'notification_service.dart';
 
 /// Service for managing announcements in Firestore
 class AnnouncementService {
@@ -55,6 +56,25 @@ class AnnouncementService {
 
       // Create document with auto-generated ID
       final docRef = await _announcementsCollection.add(announcement.toMap());
+      
+      // Send push notification to club members
+      try {
+        final notificationService = NotificationService();
+        await notificationService.sendNotificationToTopic(
+          topic: 'club_${announcement.clubId}',
+          title: 'New Announcement',
+          body: announcement.title,
+          type: NotificationType.announcement,
+          data: {
+            'announcementId': docRef.id,
+            'clubId': announcement.clubId,
+          },
+        );
+      } catch (e) {
+        // Log error but don't fail announcement creation
+        print('Failed to send announcement notification: $e');
+      }
+      
       return docRef.id;
     } on FirebaseException catch (e) {
       throw FirebaseException(
@@ -190,6 +210,104 @@ class AnnouncementService {
       );
     } catch (e) {
       throw Exception('Failed to toggle pin: $e');
+    }
+  }
+
+  /// Get filtered announcements with advanced filtering
+  ///
+  /// Parameters:
+  /// - [clubId]: Filter by club ID
+  /// - [teamId]: Filter by team ID
+  /// - [startDate]: Filter announcements on or after this date
+  /// - [endDate]: Filter announcements on or before this date
+  /// - [searchQuery]: Search in title and content
+  ///
+  /// Returns: Stream of filtered announcements
+  Stream<List<AnnouncementModel>> getFilteredAnnouncements({
+    required String clubId,
+    String? teamId,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? searchQuery,
+  }) {
+    try {
+      Stream<List<AnnouncementModel>> announcementStream =
+          getAnnouncementsByClub(clubId);
+
+      return announcementStream.map((announcements) {
+        var filtered = announcements;
+
+        // Filter by team
+        if (teamId != null && teamId.isNotEmpty) {
+          filtered = filtered.where((announcement) {
+            return announcement.teamId == teamId;
+          }).toList();
+        }
+
+        // Filter by date range
+        if (startDate != null) {
+          filtered = filtered.where((announcement) {
+            return announcement.createdAt.isAfter(startDate) ||
+                announcement.createdAt.isAtSameMomentAs(startDate);
+          }).toList();
+        }
+
+        if (endDate != null) {
+          final endOfDay = DateTime(
+            endDate.year,
+            endDate.month,
+            endDate.day,
+            23,
+            59,
+            59,
+          );
+          filtered = filtered.where((announcement) {
+            return announcement.createdAt.isBefore(endOfDay) ||
+                announcement.createdAt.isAtSameMomentAs(endOfDay);
+          }).toList();
+        }
+
+        // Filter by search query
+        if (searchQuery != null && searchQuery.isNotEmpty) {
+          final lowerQuery = searchQuery.toLowerCase();
+          filtered = filtered.where((announcement) {
+            return announcement.title.toLowerCase().contains(lowerQuery) ||
+                announcement.content.toLowerCase().contains(lowerQuery);
+          }).toList();
+        }
+
+        return filtered;
+      });
+    } catch (e) {
+      throw Exception('Failed to get filtered announcements: $e');
+    }
+  }
+
+  /// Search announcements by query
+  ///
+  /// Parameters:
+  /// - [clubId]: Club ID to search within
+  /// - [query]: Search query string
+  ///
+  /// Returns: Stream of matching announcements
+  Stream<List<AnnouncementModel>> searchAnnouncements(
+    String clubId,
+    String query,
+  ) {
+    try {
+      if (query.isEmpty) {
+        return getAnnouncementsByClub(clubId);
+      }
+
+      return getAnnouncementsByClub(clubId).map((announcements) {
+        final lowerQuery = query.toLowerCase();
+        return announcements.where((announcement) {
+          return announcement.title.toLowerCase().contains(lowerQuery) ||
+              announcement.content.toLowerCase().contains(lowerQuery);
+        }).toList();
+      });
+    } catch (e) {
+      throw Exception('Failed to search announcements: $e');
     }
   }
 }

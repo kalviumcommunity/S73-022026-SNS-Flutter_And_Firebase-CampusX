@@ -1,12 +1,17 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/services/club_service.dart';
+import '../../../core/services/storage_service.dart';
 import '../../../core/services/team_service.dart';
 import '../../../models/announcement_model.dart';
+import '../../../models/attachment_model.dart';
 import '../../../models/club_model.dart';
 import '../../../models/team_model.dart';
+import '../../../shared/widgets/attachment_picker_widget.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/announcement_provider.dart';
 
@@ -44,6 +49,8 @@ class _CreateAnnouncementScreenState extends ConsumerState<CreateAnnouncementScr
   String? _selectedClubId;
   String? _selectedTeamId;
   bool _isPinned = false;
+  final List<File> _selectedFiles = [];
+  bool _isUploadingAttachments = false;
 
   @override
   void dispose() {
@@ -61,17 +68,47 @@ class _CreateAnnouncementScreenState extends ConsumerState<CreateAnnouncementScr
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Post Announcement'),
+        title: const Text(
+          'Post Announcement',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+            letterSpacing: 0.5,
+            color: Colors.white,
+            shadows: [
+              Shadow(
+                offset: Offset(0, 1),
+                blurRadius: 3.0,
+                color: Colors.black38,
+              ),
+            ],
+          ),
+        ),
         elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF6366F1),
+                Color(0xFF8B5CF6),
+                Color(0xFF06B6D4),
+              ],
+            ),
+          ),
+        ),
       ),
-      body: operationState.isLoading
-          ? const Center(
+      body: operationState.isLoading || _isUploadingAttachments
+          ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Posting announcement...'),
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(_isUploadingAttachments 
+                    ? 'Uploading attachments...'
+                    : 'Posting announcement...'),
                 ],
               ),
             )
@@ -277,6 +314,24 @@ class _CreateAnnouncementScreenState extends ConsumerState<CreateAnnouncementScr
                           },
                           maxLength: 1000,
                         ),
+                        const SizedBox(height: 24),
+
+                        // Attachments
+                        Text(
+                          'Attachments (Optional)',
+                          style: theme.textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        AttachmentPickerWidget(
+                          maxFiles: 5,
+                          allowMultiple: true,
+                          onFilesSelected: (files) {
+                            setState(() {
+                              _selectedFiles.clear();
+                              _selectedFiles.addAll(files);
+                            });
+                          },
+                        ),
                         const SizedBox(height: 16),
 
                         // Pin Checkbox
@@ -379,11 +434,53 @@ class _CreateAnnouncementScreenState extends ConsumerState<CreateAnnouncementScr
       return;
     }
 
+    // Upload attachments if any (before creating announcement)
+    final List<AttachmentModel> attachments = [];
+    if (_selectedFiles.isNotEmpty) {
+      setState(() {
+        _isUploadingAttachments = true;
+      });
+      
+      try {
+        // Create a temporary announcement ID for storage path
+        final tempAnnouncementId = DateTime.now().millisecondsSinceEpoch.toString();
+        final storageService = StorageService();
+        
+        for (final file in _selectedFiles) {
+          final attachment = await storageService.uploadAnnouncementAttachment(
+            file: file,
+            announcementId: tempAnnouncementId,
+          );
+          attachments.add(attachment);
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isUploadingAttachments = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to upload attachments: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isUploadingAttachments = false;
+          });
+        }
+      }
+    }
+
     // Create announcement model
     final announcement = AnnouncementModel(
       id: '', // Will be generated by Firestore
       title: _titleController.text.trim(),
       content: _contentController.text.trim(),
+      attachments: attachments,
       clubId: _selectedClubId!,
       teamId: _selectedTeamId, // Optional team ID
       createdBy: userId,

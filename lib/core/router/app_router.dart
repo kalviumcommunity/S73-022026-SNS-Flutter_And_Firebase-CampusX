@@ -7,21 +7,30 @@ import '../../features/auth/screens/signup_screen.dart';
 import '../../features/dashboard/screens/student_dashboard.dart';
 import '../../features/dashboard/screens/club_dashboard.dart';
 import '../../features/dashboard/screens/admin_dashboard.dart';
-import '../../features/events/screens/event_list_screen.dart';
+import '../../features/events/screens/enhanced_event_list_screen.dart';
 import '../../features/events/screens/event_details_screen.dart';
 import '../../features/events/screens/create_event_screen.dart';
 import '../../features/events/screens/event_registration_screen.dart';
+import '../../features/events/screens/calendar_screen.dart';
 import '../../features/admin/screens/role_requests_screen.dart';
 import '../../features/admin/screens/manage_clubs_screen.dart';
-import '../../features/admin/screens/user_management_screen.dart';
+import '../../features/admin/screens/enhanced_user_management_screen.dart';
 import '../../features/admin/screens/analytics_screen.dart';
 import '../../features/admin/screens/system_settings_screen.dart';
 import '../../features/clubs/screens/club_list_screen.dart';
 import '../../features/clubs/screens/club_profile_screen.dart';
-import '../../features/teams/screens/manage_teams_screen.dart';
+import '../../features/teams/screens/enhanced_manage_teams_screen.dart';
 import '../../features/teams/screens/team_details_screen.dart';
 import '../../features/announcements/screens/create_announcement_screen.dart';
-import '../../features/announcements/screens/announcements_list_screen.dart';
+import '../../features/announcements/screens/enhanced_announcements_list_screen.dart';
+import '../../features/events/screens/scan_attendance_screen.dart';
+import '../../features/events/screens/attendance_list_screen.dart';
+import '../../features/events/screens/student_attendance_screen.dart';
+import '../../features/events/widgets/event_qr_screen_wrapper.dart';
+import '../../features/profile/screens/profile_screen.dart';
+import '../../features/profile/screens/view_profile_screen.dart';
+import '../../features/profile/screens/settings_screen.dart';
+import '../../features/settings/screens/notification_settings_screen.dart';
 
 /// GoRouter configuration provider
 final routerProvider = Provider<GoRouter>((ref) {
@@ -77,7 +86,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/events',
         name: 'events',
-        builder: (context, state) => const EventsListScreen(),
+        builder: (context, state) => const EnhancedEventListScreen(),
+      ),
+      GoRoute(
+        path: '/calendar',
+        name: 'calendar',
+        builder: (context, state) => const CalendarScreen(),
       ),
       GoRoute(
         path: '/create-event',
@@ -113,7 +127,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/admin/users',
         name: 'admin-users',
-        builder: (context, state) => const UserManagementScreen(),
+        builder: (context, state) => const EnhancedUserManagementScreen(),
       ),
       GoRoute(
         path: '/admin/analytics',
@@ -141,7 +155,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/manage-teams',
         name: 'manage-teams',
-        builder: (context, state) => const ManageTeamsScreen(),
+        builder: (context, state) => const EnhancedManageTeamsScreen(),
       ),
       GoRoute(
         path: '/teams/:id',
@@ -161,8 +175,63 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'announcements',
         builder: (context, state) {
           final clubId = state.pathParameters['clubId']!;
-          return AnnouncementsListScreen(clubId: clubId);
+          return EnhancedAnnouncementsListScreen(clubId: clubId);
         },
+      ),
+      GoRoute(
+        path: '/event-qr/:id',
+        name: 'event-qr',
+        builder: (context, state) {
+          final eventId = state.pathParameters['id']!;
+          return EventQRScreenWrapper(eventId: eventId);
+        },
+      ),
+      GoRoute(
+        path: '/scan-attendance',
+        name: 'scan-attendance',
+        builder: (context, state) => const ScanAttendanceScreen(),
+      ),
+      GoRoute(
+        path: '/attendance-list/:id',
+        name: 'attendance-list',
+        builder: (context, state) {
+          final eventId = state.pathParameters['id']!;
+          final manualParam = state.uri.queryParameters['manual'];
+          final showManual = manualParam == 'true';
+          
+          return AttendanceListScreen(
+            eventId: eventId,
+            showManualMark: showManual,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/my-attendance',
+        name: 'my-attendance',
+        builder: (context, state) => const StudentAttendanceScreen(),
+      ),
+      GoRoute(
+        path: '/profile',
+        name: 'profile',
+        builder: (context, state) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: '/view-profile/:id',
+        name: 'view-profile',
+        builder: (context, state) {
+          final userId = state.pathParameters['id']!;
+          return ViewProfileScreen(userId: userId);
+        },
+      ),
+      GoRoute(
+        path: '/settings',
+        name: 'settings',
+        builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/notification-settings',
+        name: 'notification-settings',
+        builder: (context, state) => const NotificationSettingsScreen(),
       ),
     ],
   );

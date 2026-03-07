@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/registration_model.dart';
+import 'notification_service.dart';
 
 /// Service class for handling event registration operations with capacity control
 class RegistrationService {
@@ -35,6 +36,8 @@ class RegistrationService {
   ) async {
     try {
       String? registrationId;
+      String? eventTitle;
+      String? registrationStatus;
 
       await _firestore.runTransaction((transaction) async {
         // Check if user already has a registration for this event
@@ -57,6 +60,7 @@ class RegistrationService {
 
         final eventData = eventDoc.data() as Map<String, dynamic>;
         final capacity = eventData['capacity'] as int? ?? 0;
+        eventTitle = eventData['title'] as String? ?? 'Event';
 
         // Count current registrations with status = "registered"
         final registeredQuery = await _registrationsCollection
@@ -68,6 +72,7 @@ class RegistrationService {
 
         // Determine status based on capacity
         final status = registeredCount < capacity ? 'registered' : 'waitlisted';
+        registrationStatus = status;
 
         // Create new registration document
         final newRegistrationRef = _registrationsCollection.doc();
@@ -84,6 +89,34 @@ class RegistrationService {
 
         transaction.set(newRegistrationRef, registration.toMap());
       });
+
+      // Send push notification after successful registration
+      if (registrationId != null && eventTitle != null && registrationStatus != null) {
+        try {
+          final notificationService = NotificationService();
+          final title = registrationStatus == 'registered' 
+              ? 'Registration Confirmed' 
+              : 'Added to Waitlist';
+          final body = registrationStatus == 'registered'
+              ? 'You are registered for $eventTitle'
+              : 'You have been added to the waitlist for $eventTitle';
+          
+          await notificationService.sendNotificationToUser(
+            userId: userId,
+            title: title,
+            body: body,
+            type: NotificationType.eventRegistration,
+            data: {
+              'eventId': eventId,
+              'clubId': clubId,
+              'status': registrationStatus,
+            },
+          );
+        } catch (e) {
+          // Log error but don't fail registration
+          print('Failed to send registration notification: $e');
+        }
+      }
 
       return registrationId ?? '';
     } on FirebaseException catch (e) {

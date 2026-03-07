@@ -56,6 +56,15 @@ final waitlistedUsersProvider = StreamProvider.autoDispose
   return service.getWaitlistedUsers(eventId);
 });
 
+/// Provider for all registrations by event (admin view)
+/// 
+/// Returns real-time stream of all registrations (confirmed + waitlisted) for an event.
+final registrationsByEventProvider = StreamProvider.autoDispose
+    .family<List<RegistrationModel>, String>((ref, eventId) {
+  final service = ref.watch(registrationServiceProvider);
+  return service.getRegistrationsByEvent(eventId);
+});
+
 /// Provider for user's registrations
 /// 
 /// Returns stream of all registrations for a user

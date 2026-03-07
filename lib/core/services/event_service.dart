@@ -287,4 +287,103 @@ class EventService {
       throw Exception('Failed to get past events: $e');
     }
   }
+
+  /// Search events by name
+  /// 
+  /// Note: Firestore doesn't support full-text search, so we fetch all
+  /// events and filter in-memory. For production, consider using
+  /// Algolia or ElasticSearch for better performance.
+  /// 
+  /// Parameters:
+  /// - [query]: Search query string
+  /// 
+  /// Returns: Stream of filtered events
+  Stream<List<EventModel>> searchEventsByName(String query) {
+    try {
+      if (query.isEmpty) {
+        return getAllEvents();
+      }
+
+      return getAllEvents().map((events) {
+        final lowerQuery = query.toLowerCase();
+        return events.where((event) {
+          return event.title.toLowerCase().contains(lowerQuery) ||
+              event.description.toLowerCase().contains(lowerQuery);
+        }).toList();
+      });
+    } catch (e) {
+      throw Exception('Failed to search events: $e');
+    }
+  }
+
+  /// Get events with advanced filtering
+  /// 
+  /// Parameters:
+  /// - [clubId]: Filter by club ID
+  /// - [startDate]: Filter events on or after this date
+  /// - [endDate]: Filter events on or before this date
+  /// - [isUpcoming]: If true, only upcoming events; if false, only past events; if null, all
+  /// - [searchQuery]: Search in title and description
+  /// 
+  /// Returns: Stream of filtered events
+  Stream<List<EventModel>> getFilteredEvents({
+    String? clubId,
+    DateTime? startDate,
+    DateTime? endDate,
+    bool? isUpcoming,
+    String? searchQuery,
+  }) {
+    try {
+      // Start with base query
+      Stream<List<EventModel>> eventStream;
+
+      if (clubId != null) {
+        eventStream = getEventsByClub(clubId);
+      } else if (isUpcoming == true) {
+        eventStream = getUpcomingEvents();
+      } else if (isUpcoming == false) {
+        eventStream = getPastEvents();
+      } else {
+        eventStream = getAllEvents();
+      }
+
+      // Apply in-memory filters
+      return eventStream.map((events) {
+        var filtered = events;
+
+        // Filter by date range
+        if (startDate != null) {
+          filtered = filtered.where((event) {
+            return event.date.isAfter(startDate) ||
+                event.date.isAtSameMomentAs(startDate);
+          }).toList();
+        }
+
+        if (endDate != null) {
+          filtered = filtered.where((event) {
+            return event.date.isBefore(endDate) ||
+                event.date.isAtSameMomentAs(endDate);
+          }).toList();
+        }
+
+        // Filter by search query
+        if (searchQuery != null && searchQuery.isNotEmpty) {
+          final lowerQuery = searchQuery.toLowerCase();
+          filtered = filtered.where((event) {
+            return event.title.toLowerCase().contains(lowerQuery) ||
+                event.description.toLowerCase().contains(lowerQuery);
+          }).toList();
+        }
+
+        // Additional club filter if not already applied at query level
+        if (clubId != null) {
+          filtered = filtered.where((event) => event.clubId == clubId).toList();
+        }
+
+        return filtered;
+      });
+    } catch (e) {
+      throw Exception('Failed to get filtered events: $e');
+    }
+  }
 }
