@@ -1,12 +1,30 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/services/club_service.dart';
+import '../../../core/services/storage_service.dart';
+import '../../../models/club_model.dart';
 import '../../../models/event_model.dart';
+import '../../../shared/widgets/image_picker_widget.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/event_provider.dart';
+
+/// Provider for clubs where user is admin
+final userAdminClubsForEventProvider = StreamProvider<List<ClubModel>>((ref) {
+  final user = ref.watch(currentUserProvider);
+  final clubService = ClubService();
+  
+  if (user == null) {
+    return Stream.value([]);
+  }
+  
+  return clubService.getClubsByAdmin(user.uid);
+});
 
 /// Screen for creating a new event (club_admin only)
 class CreateEventScreen extends ConsumerStatefulWidget {
@@ -22,10 +40,12 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
   final _capacityController = TextEditingController();
-  final _clubIdController = TextEditingController();
 
+  String? _selectedClubId;
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
+  File? _selectedImage;
+  bool _isUploadingImage = false;
 
   @override
   void dispose() {
@@ -33,7 +53,6 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     _descriptionController.dispose();
     _locationController.dispose();
     _capacityController.dispose();
-    _clubIdController.dispose();
     super.dispose();
   }
 
@@ -41,24 +60,92 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   Widget build(BuildContext context) {
     final operationState = ref.watch(eventOperationsProvider);
     final currentUser = ref.watch(authProvider).user;
+    final adminClubsAsync = ref.watch(userAdminClubsForEventProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create Event'),
+        title: const Text(
+          'Create Event',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+            letterSpacing: 0.5,
+            color: Colors.white,
+            shadows: [
+              Shadow(
+                offset: Offset(0, 1),
+                blurRadius: 3.0,
+                color: Colors.black38,
+              ),
+            ],
+          ),
+        ),
         elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF6366F1),
+                Color(0xFF8B5CF6),
+                Color(0xFF06B6D4),
+              ],
+            ),
+          ),
+        ),
       ),
-      body: operationState.isLoading
-          ? const Center(
+      body: operationState.isLoading || _isUploadingImage
+          ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Creating event...'),
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(_isUploadingImage ? 'Uploading image...' : 'Creating event...'),
                 ],
               ),
             )
-          : SingleChildScrollView(
+          : adminClubsAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, stack) => Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline, size: 60, color: Colors.red),
+                    const SizedBox(height: 16),
+                    Text('Error: $error'),
+                  ],
+                ),
+              ),
+              data: (clubs) {
+                if (clubs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, size: 60),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'You are not assigned as admin to any club',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Please contact the college admin',
+                          style: TextStyle(fontSize: 14, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                // Auto-select first club if not already selected
+                if (_selectedClubId == null && clubs.isNotEmpty) {
+                  _selectedClubId = clubs.first.id;
+                }
+
+                return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Form(
                 key: _formKey,
@@ -128,25 +215,65 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                       },
                       textCapitalization: TextCapitalization.sentences,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
 
-                    // Club ID Field
-                    TextFormField(
-                      controller: _clubIdController,
-                      decoration: const InputDecoration(
-                        labelText: 'Club ID',
-                        hintText: 'Enter your club ID',
-                        prefixIcon: Icon(Icons.group),
-                        border: OutlineInputBorder(),
-                        helperText: 'The ID of the club organizing this event',
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter a club ID';
-                        }
-                        return null;
+                    // Event Image Upload
+                    Text(
+                      'Event Banner (Optional)',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    ImagePickerWidget(
+                      placeholderText: 'Add Event Banner',
+                      height: 200,
+                      onImageSelected: (file) {
+                        setState(() {
+                          _selectedImage = file;
+                        });
                       },
                     ),
+                    const SizedBox(height: 24),
+
+                    // Club Selection (automatic or dropdown)
+                    if (clubs.length == 1)
+                      InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Club',
+                          prefixIcon: Icon(Icons.group),
+                          border: OutlineInputBorder(),
+                        ),
+                        child: Text(
+                          clubs.first.name,
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                      )
+                    else
+                      DropdownButtonFormField<String>(
+                        value: _selectedClubId,
+                        decoration: const InputDecoration(
+                          labelText: 'Select Club',
+                          prefixIcon: Icon(Icons.group),
+                          border: OutlineInputBorder(),
+                          helperText: 'Choose which club is organizing this event',
+                        ),
+                        items: clubs.map((club) {
+                          return DropdownMenuItem<String>(
+                            value: club.id,
+                            child: Text(club.name),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedClubId = value;
+                          });
+                        },
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please select a club';
+                          }
+                          return null;
+                        },
+                      ),
                     const SizedBox(height: 16),
 
                     // Date Picker
@@ -312,6 +439,8 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                   ],
                 ),
               ),
+            );
+              },
             ),
     );
   }
@@ -395,12 +524,60 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       _selectedTime!.minute,
     );
 
+    if (_selectedClubId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a club'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Upload image if selected (before creating event)
+    String? imageUrl;
+    if (_selectedImage != null) {
+      setState(() {
+        _isUploadingImage = true;
+      });
+      
+      try {
+        // Create a temporary event ID for storage path
+        final tempEventId = DateTime.now().millisecondsSinceEpoch.toString();
+        final storageService = StorageService();
+        imageUrl = await storageService.uploadEventImage(
+          file: _selectedImage!,
+          eventId: tempEventId,
+        );
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isUploadingImage = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to upload image: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isUploadingImage = false;
+          });
+        }
+      }
+    }
+
     // Create event model
     final event = EventModel(
       id: '', // Will be generated by Firestore
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
-      clubId: _clubIdController.text.trim(),
+      imageUrl: imageUrl,
+      clubId: _selectedClubId!,
       createdBy: userId,
       date: eventDateTime,
       location: _locationController.text.trim(),
@@ -411,7 +588,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     // Create event using provider
     final eventId = await ref
         .read(eventOperationsProvider.notifier)
-        .createEvent(event, userId!);
+        .createEvent(event, userId);
 
     if (context.mounted) {
       if (eventId != null) {

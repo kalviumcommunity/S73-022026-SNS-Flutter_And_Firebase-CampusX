@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 
+import 'notification_preferences.dart';
+
 /// User model representing a user in the app with club-scoped roles
 class UserModel extends Equatable {
   final String uid;
@@ -14,6 +16,22 @@ class UserModel extends Equatable {
   
   /// List of club IDs the user has joined
   final List<String> joinedClubs;
+  
+  /// Profile fields
+  final String? bio;
+  final String? phone;
+  final String? profilePhotoUrl;
+  
+  /// Privacy settings
+  final bool showEmail;
+  final bool showPhone;
+  
+  /// FCM token for push notifications
+  final String? fcmToken;
+  final DateTime? fcmTokenUpdatedAt;
+  
+  /// Notification preferences
+  final NotificationPreferences notificationPreferences;
 
   const UserModel({
     required this.uid,
@@ -23,6 +41,14 @@ class UserModel extends Equatable {
     this.createdAt,
     this.adminClubs = const [],
     this.joinedClubs = const [],
+    this.bio,
+    this.phone,
+    this.profilePhotoUrl,
+    this.showEmail = true,
+    this.showPhone = true,
+    this.fcmToken,
+    this.fcmTokenUpdatedAt,
+    this.notificationPreferences = const NotificationPreferences(),
   });
 
   /// Create UserModel from Firestore document map
@@ -41,6 +67,18 @@ class UserModel extends Equatable {
       joinedClubs: map['joinedClubs'] != null
           ? List<String>.from(map['joinedClubs'] as List)
           : [],
+      bio: map['bio'] as String?,
+      phone: map['phone'] as String?,
+      profilePhotoUrl: map['profilePhotoUrl'] as String?,
+      showEmail: map['showEmail'] as bool? ?? true,
+      showPhone: map['showPhone'] as bool? ?? true,
+      fcmToken: map['fcmToken'] as String?,
+      fcmTokenUpdatedAt: map['fcmTokenUpdatedAt'] != null
+          ? (map['fcmTokenUpdatedAt'] as Timestamp).toDate()
+          : null,
+      notificationPreferences: NotificationPreferences.fromMap(
+        map['notificationPreferences'] as Map<String, dynamic>?,
+      ),
     );
   }
 
@@ -55,6 +93,16 @@ class UserModel extends Equatable {
       'createdAt': createdAt != null 
           ? Timestamp.fromDate(createdAt!) 
           : FieldValue.serverTimestamp(),
+      'bio': bio,
+      'phone': phone,
+      'profilePhotoUrl': profilePhotoUrl,
+      'showEmail': showEmail,
+      'showPhone': showPhone,
+      'fcmToken': fcmToken,
+      'fcmTokenUpdatedAt': fcmTokenUpdatedAt != null
+          ? Timestamp.fromDate(fcmTokenUpdatedAt!)
+          : null,
+      'notificationPreferences': notificationPreferences.toMap(),
     };
   }
 
@@ -67,6 +115,14 @@ class UserModel extends Equatable {
     DateTime? createdAt,
     List<String>? adminClubs,
     List<String>? joinedClubs,
+    String? bio,
+    String? phone,
+    String? profilePhotoUrl,
+    bool? showEmail,
+    bool? showPhone,
+    String? fcmToken,
+    DateTime? fcmTokenUpdatedAt,
+    NotificationPreferences? notificationPreferences,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -76,6 +132,14 @@ class UserModel extends Equatable {
       createdAt: createdAt ?? this.createdAt,
       adminClubs: adminClubs ?? this.adminClubs,
       joinedClubs: joinedClubs ?? this.joinedClubs,
+      bio: bio ?? this.bio,
+      phone: phone ?? this.phone,
+      profilePhotoUrl: profilePhotoUrl ?? this.profilePhotoUrl,
+      showEmail: showEmail ?? this.showEmail,
+      showPhone: showPhone ?? this.showPhone,
+      fcmToken: fcmToken ?? this.fcmToken,
+      fcmTokenUpdatedAt: fcmTokenUpdatedAt ?? this.fcmTokenUpdatedAt,
+      notificationPreferences: notificationPreferences ?? this.notificationPreferences,
     );
   }
 
@@ -88,11 +152,22 @@ class UserModel extends Equatable {
         createdAt,
         adminClubs,
         joinedClubs,
+        bio,
+        phone,
+        profilePhotoUrl,
+        showEmail,
+        showPhone,
+        fcmToken,
+        fcmTokenUpdatedAt,
+        notificationPreferences,
       ];
 
   @override
   String toString() {
     return 'UserModel(uid: $uid, name: $name, email: $email, role: $role, '
-        'createdAt: $createdAt, adminClubs: $adminClubs, joinedClubs: $joinedClubs)';
+        'createdAt: $createdAt, adminClubs: $adminClubs, joinedClubs: $joinedClubs, '
+        'bio: $bio, phone: $phone, profilePhotoUrl: $profilePhotoUrl, '
+        'showEmail: $showEmail, showPhone: $showPhone, fcmToken: ${fcmToken != null ? "[SET]" : "null"}, '
+        'fcmTokenUpdatedAt: $fcmTokenUpdatedAt, notificationPreferences: $notificationPreferences)';
   }
 }

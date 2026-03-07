@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../models/user_model.dart';
 
 /// Authentication state class
@@ -74,6 +75,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (doc.exists) {
         final user = UserModel.fromMap(doc.data()!, doc.id);
         state = state.copyWith(user: user, isLoading: false);
+        
+        // Save FCM token for push notifications
+        try {
+          final notificationService = NotificationService();
+          if (notificationService.fcmToken != null) {
+            await notificationService.saveFcmTokenToUser(uid);
+          }
+        } catch (e) {
+          // Log error but don't fail authentication
+          print('Failed to save FCM token: $e');
+        }
       }
     } catch (e) {
       state = state.copyWith(

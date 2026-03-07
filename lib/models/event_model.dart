@@ -6,6 +6,7 @@ class EventModel extends Equatable {
   final String id;
   final String title;
   final String description;
+  final String? imageUrl;
   final String clubId;
   final String createdBy;
   final DateTime date;
@@ -17,6 +18,7 @@ class EventModel extends Equatable {
     required this.id,
     required this.title,
     required this.description,
+    this.imageUrl,
     required this.clubId,
     required this.createdBy,
     required this.date,
@@ -31,6 +33,7 @@ class EventModel extends Equatable {
       id: documentId,
       title: map['title'] as String? ?? '',
       description: map['description'] as String? ?? '',
+      imageUrl: map['imageUrl'] as String?,
       clubId: map['clubId'] as String? ?? '',
       createdBy: map['createdBy'] as String? ?? '',
       date: map['date'] != null
@@ -49,6 +52,7 @@ class EventModel extends Equatable {
     return {
       'title': title,
       'description': description,
+      'imageUrl': imageUrl,
       'clubId': clubId,
       'createdBy': createdBy,
       'date': Timestamp.fromDate(date),
@@ -60,11 +64,12 @@ class EventModel extends Equatable {
     };
   }
 
-  /// Create a copy of EventModel with updated fields
+ /// Create a copy of EventModel with updated fields
   EventModel copyWith({
     String? id,
     String? title,
     String? description,
+    String? imageUrl,
     String? clubId,
     String? createdBy,
     DateTime? date,
@@ -76,6 +81,7 @@ class EventModel extends Equatable {
       id: id ?? this.id,
       title: title ?? this.title,
       description: description ?? this.description,
+      imageUrl: imageUrl ?? this.imageUrl,
       clubId: clubId ?? this.clubId,
       createdBy: createdBy ?? this.createdBy,
       date: date ?? this.date,
@@ -90,6 +96,7 @@ class EventModel extends Equatable {
         id,
         title,
         description,
+        imageUrl,
         clubId,
         createdBy,
         date,
